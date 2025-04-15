@@ -24,14 +24,6 @@ MATHPIX_APP_KEY=your-app-key
 MATHPIX_URL=https://api.mathpix.com  # optional, defaults to this value
 ```
 
-Then initialize the client:
-
-```python
-from mathpix.mathpix_client import MathpixClient
-
-client = MathpixClient()  # Will use environment variables
-```
-
 ### Passing credentials directly
 
 ```python
@@ -41,6 +33,14 @@ client = MathpixClient(
     app_id="your-app-id",
     app_key="your-app-key"
 )
+```
+
+Then initialize the client:
+
+```python
+from mathpix.mathpix_client import MathpixClient
+
+client = MathpixClient()  # Will use environment variables
 ```
 
 ## Features
@@ -76,7 +76,7 @@ client = MathpixClient()
 
 # Process an image file
 image = client.image_new(
-    file_path="path/to/image.jpg"
+    file_url="https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
 )
 
 # Get the Mathpix Markdown (MMD) representation
@@ -84,7 +84,7 @@ mmd = image.mmd()
 print(mmd)
 
 # Get line-by-line OCR data
-lines = image.lines()
+lines = image.lines_json()
 ```
 
 ### Convert Mathpix Markdown (MMD)
