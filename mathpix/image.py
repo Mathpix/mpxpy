@@ -1,0 +1,114 @@
+import json
+from pathlib import Path
+import requests
+from typing import Optional
+from mathpix.auth import Auth
+from mathpix.logger import logger
+
+
+class Image:
+    """Handles image conversion requests to v3/text.
+
+    This class processes images using the Mathpix API to extract structured content.
+
+    Attributes:
+        auth: An Auth instance with Mathpix credentials.
+        file_path: Path to a local image file, if using a local file.
+        file_url: URL of a remote image, if using a remote file.
+    """
+    def __init__(self, auth: Auth, file_path: Optional[str] = None, file_url: Optional[str] = None):
+        """Initialize an Image instance.
+
+        Args:
+            auth: Auth instance containing Mathpix API credentials.
+            file_path: Path to a local image file.
+            file_url: URL of a remote image.
+
+        Raises:
+            ValueError: If auth is not provided, if neither file_path nor file_url is provided,
+                        or if both file_path and file_url are provided.
+        """
+        self.auth = auth
+        if not self.auth:
+            logger.error("Image requires an authenticated client")
+            raise ValueError("Image requires an authenticated client")
+        self.file_path = file_path or ''
+        self.file_url = file_url or ''
+        if not self.file_path and not self.file_url:
+            logger.error("Image requires a file path or file URL")
+            raise ValueError("Image requires a file path or file URL")
+        if self.file_path and self.file_url:
+            logger.error("Exactly one of file path or file URL must be provider")
+            raise ValueError("Exactly one of file path or file URL must be provider")
+
+    def results(
+            self,
+            include_line_data: Optional[bool] = False,
+    ):
+        """Process the image and get OCR results.
+
+        Sends the image to v3/text for OCR processing and returns the full result.
+
+        Args:
+            include_line_data: If True, includes detailed line-by-line OCR data in the result.
+
+        Returns:
+            dict: JSON response containing recognition results, including extracted text and metadata.
+
+        Raises:
+            FileNotFoundError: If the file_path does not point to an existing file.
+            ValueError: If the API request fails.
+        """
+        logger.info(f"Processing image: path={self.file_path}, url={self.file_url}, include_line_data={include_line_data}")
+        endpoint = self.auth.api_url + '/v3/text'
+        options = {
+            "include_line_data": include_line_data
+        }
+        data = {
+            "options_json": json.dumps(options)
+        }
+        if self.file_path:
+            path = Path(self.file_path)
+            if not path.is_file():
+                logger.error(f"File not found: {self.file_path}")
+                raise FileNotFoundError(f"File path not found: {self.file_path}")
+            with path.open("rb") as pdf_file:
+                files = {"file": pdf_file}
+                try:
+                    response = requests.post(endpoint, data=data, files=files, headers=self.auth.headers)
+                    response.raise_for_status()
+                    logger.info("OCR processing successful")
+                    return response.json()
+                except requests.exceptions.RequestException as e:
+                    logger.error(f"Mathpix image request failed: {e}")
+                    raise ValueError(f"Mathpix image request failed: {e}")
+        else:
+            options["src"] = self.file_url
+            try:
+                response = requests.post(endpoint, json=options, headers=self.auth.headers)
+                response.raise_for_status()
+                logger.info("OCR processing successful")
+                return response.json()
+            except requests.exceptions.RequestException as e:
+                logger.error(f"Mathpix image request failed: {e}")
+                raise ValueError(f"Mathpix image request failed: {e}")
+
+    def lines_json(self):
+        """Get line-by-line OCR data for the image.
+
+        Returns:
+            list: Detailed information about each detected line of text.
+        """
+        logger.info("Getting line-by-line OCR data")
+        result = self.results(include_line_data=True)
+        return result['line_data']
+
+    def mmd(self):
+        """Get the Mathpix Markdown (MMD) representation of the image.
+
+        Returns:
+            str: The recognized text in Mathpix Markdown format, with proper math formatting.
+        """
+        logger.info("Getting Mathpix Markdown (MMD) representation")
+        result = self.results()
+        return result['text']

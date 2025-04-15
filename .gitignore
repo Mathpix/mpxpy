@@ -1,0 +1,7 @@
+mathpix.egg-info
+local.env
+mathpix/__pycache__
+.idea
+tests/__pycache__
+tests/output
+dist
