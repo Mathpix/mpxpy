@@ -137,7 +137,7 @@ class MathpixClient:
             "options_json": json.dumps(options)
         }
         if file_path:
-            logger.info(f"Creating new File: path={file_path}")
+            logger.info(f"Creating new PDF: path={file_path}")
             path = Path(file_path)
             if not path.is_file():
                 logger.error(f"File not found: {file_path}")
@@ -149,13 +149,13 @@ class MathpixClient:
                     response.raise_for_status()
                     response_json = response.json()
                     pdf_id = response_json['pdf_id']
-                    logger.info(f"File from local path processing started, PDF ID: {pdf_id}")
+                    logger.info(f"PDF from local path processing started, PDF ID: {pdf_id}")
                     return Pdf(auth=self.auth, pdf_id=pdf_id)
                 except requests.exceptions.RequestException as e:
-                    logger.error(f"File upload failed: {e}")
+                    logger.error(f"PDF upload failed: {e}")
                     raise MathpixClientError(f"Mathpix PDF request failed: {e}")
         else:
-            logger.info(f"Creating new File: url={file_url}")
+            logger.info(f"Creating new PDF: url={file_url}")
             options["url"] = file_url
             try:
                 response = requests.post(endpoint, json=options, headers=self.auth.headers)
@@ -163,7 +163,7 @@ class MathpixClient:
                 response_json = response.json()
                 logger.info(response_json)
                 pdf_id = response_json['pdf_id']
-                logger.info(f"File from URL processing started, PDF ID: {pdf_id}")
+                logger.info(f"PDF from URL processing started, PDF ID: {pdf_id}")
                 return Pdf(auth=self.auth, pdf_id=pdf_id)
             except requests.exceptions.RequestException as e:
                 logger.error(f"URL processing failed: {e}")
