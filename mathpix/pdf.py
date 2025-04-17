@@ -62,6 +62,8 @@ class Pdf:
                     break
                 elif isinstance(status, dict) and 'error' in status:
                     logger.error(f"Error in PDF {self.pdf_id} processing: {status.get('error')}")
+                else:
+                    ignore_conversions = True
                 logger.info(f"PDF {self.pdf_id} processing in progress, waiting...")
             except Exception as e:
                 logger.error(f"Exception during PDF status check: {e}")

@@ -21,6 +21,22 @@ def test_pdf_convert_remote_file(client):
             "data": "test data"
         },
         webhook_enabled_events=["pdf_processing_complete"],
+    )
+    assert pdf_file.pdf_id is not None
+    assert pdf_file.wait_until_complete(timeout=60)
+    status = pdf_file.pdf_status()
+    assert status['status'] == 'completed'
+
+def test_pdf_convert_remote_file_to_docx(client):
+    pdf_file_url = "http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf"
+    pdf_file = client.pdf_new(
+        file_url=pdf_file_url,
+        webhook_url="http://gateway:8080/webhook/convert-api",
+        mathpix_webhook_secret="test-secret",
+        webhook_payload={
+            "data": "test data"
+        },
+        webhook_enabled_events=["pdf_processing_complete"],
         conversion_formats={
             "docx": True
         }
