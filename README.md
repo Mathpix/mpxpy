@@ -1,11 +1,11 @@
-# Mathpix Python Client
+# mpxpy
 
 The official Python client for the Mathpix API. Process PDFs, images, and convert math/text content with the Mathpix API.
 
 ## Installation
 
 ```bash
-pip install mathpix
+pip install mpxpy
 ```
 
 ## Authentication
@@ -27,7 +27,7 @@ MATHPIX_URL=https://api.mathpix.com  # optional, defaults to this value
 ### Passing credentials directly
 
 ```python
-from mathpix.mathpix_client import MathpixClient
+from mpxpy.mathpix_client import MathpixClient
 
 client = MathpixClient(
     app_id="your-app-id",
@@ -38,7 +38,7 @@ client = MathpixClient(
 Then initialize the client:
 
 ```python
-from mathpix.mathpix_client import MathpixClient
+from mpxpy.mathpix_client import MathpixClient
 
 client = MathpixClient()  # Will use environment variables
 ```
@@ -48,7 +48,8 @@ client = MathpixClient()  # Will use environment variables
 ### Process a PDF
 
 ```python
-from mathpix.mathpix_client import MathpixClient
+from mpxpy.mathpix_client import MathpixClient
+
 client = MathpixClient()
 
 # Process a PDF file
@@ -71,7 +72,8 @@ pdf_file.download_output_to_local_path("md", "./output")
 ### Process an Image with Math Content
 
 ```python
-from mathpix.mathpix_client import MathpixClient
+from mpxpy.mathpix_client import MathpixClient
+
 client = MathpixClient()
 
 # Process an image file
@@ -90,7 +92,8 @@ lines = image.lines_json()
 ### Convert Mathpix Markdown (MMD)
 
 ```python
-from mathpix.mathpix_client import MathpixClient
+from mpxpy.mathpix_client import MathpixClient
+
 client = MathpixClient()
 
 # Convert Mathpix Markdown to various formats
@@ -111,7 +114,7 @@ latex_output = conversion.download_output("latex")
 The client provides detailed error information:
 
 ```python
-from mathpix.mathpix_client import MathpixClient, MathpixClientError
+from mpxpy.mathpix_client import MathpixClient, MathpixClientError
 
 client = MathpixClient(app_id="your-app-id", app_key="your-app-key")
 
@@ -129,8 +132,8 @@ except MathpixClientError as e:
 
 ```bash
 # Clone the repository
-git clone git@github.com:Mathpix/mathpix-python.git
-cd mathpix-python
+git clone git@github.com:Mathpix/mpxpy.git
+cd mpxpy
 
 # Install in development mode
 pip install -e .

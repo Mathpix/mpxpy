@@ -2,8 +2,8 @@ import json
 from pathlib import Path
 import requests
 from typing import Optional
-from mathpix.auth import Auth
-from mathpix.logger import logger
+from mpxpy.auth import Auth
+from mpxpy.logger import logger
 
 
 class Image:

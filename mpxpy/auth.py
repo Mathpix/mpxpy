@@ -1,6 +1,6 @@
 import os
 from dotenv import load_dotenv
-from mathpix.logger import logger
+from mpxpy.logger import logger
 
 class Auth:
     """Authentication and configuration handler for Mathpix API.

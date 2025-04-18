@@ -1,6 +1,6 @@
-mathpix.egg-info
+mpxpy.egg-info
 local.env
-mathpix/__pycache__
+mpxpy/__pycache__
 .idea
 tests/__pycache__
 tests/output

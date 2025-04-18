@@ -2,12 +2,12 @@ import json
 import requests
 from typing import Dict, Any, Optional, List
 from pathlib import Path
-from mathpix.pdf import Pdf
-from mathpix.image import Image
-from mathpix.file_batch import FileBatch
-from mathpix.conversion import Conversion
-from mathpix.auth import Auth
-from mathpix.logger import logger
+from mpxpy.pdf import Pdf
+from mpxpy.image import Image
+from mpxpy.file_batch import FileBatch
+from mpxpy.conversion import Conversion
+from mpxpy.auth import Auth
+from mpxpy.logger import logger
 
 
 class MathpixClientError(Exception):

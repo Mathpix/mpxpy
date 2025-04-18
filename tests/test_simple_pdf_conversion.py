@@ -1,7 +1,7 @@
 import os
 import shutil
 import pytest
-from mathpix.mathpix_client import MathpixClient
+from mpxpy.mathpix_client import MathpixClient
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 

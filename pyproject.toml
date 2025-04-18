@@ -30,12 +30,12 @@ dependencies = [
     "requests >= 2.20.0",
     "python-dotenv>=0.15.0",
 ]
-keywords = ["mathpix", "mpx", "py", "client", "ocr", "api", "sdk", "python","package", "development"]
+keywords = ["mathpix", "mpx", "mpxpy", "py", "client", "ocr", "api", "sdk", "python","package", "development"]
 
 # --- Project URLs (Links displayed on PyPI) ---
 [project.urls]
-Homepage = "https://github.com/Mathpix/mathpix-python"
-Repository = "https://github.com/Mathpix/mathpix-python"
-"Bug Tracker" = "https://github.com/Mathpix/mathpix-python/issues"
+Homepage = "https://github.com/Mathpix/mpxpy"
+Repository = "https://github.com/Mathpix/mpxpy"
+"Bug Tracker" = "https://github.com/Mathpix/mpxpy/issues"
 [tool.setuptools.packages.find]
 exclude = ["tests*"]

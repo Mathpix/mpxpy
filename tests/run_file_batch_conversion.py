@@ -1,6 +1,6 @@
 import glob
 import pytest
-from mathpix.mathpix_client import MathpixClient
+from mpxpy.mathpix_client import MathpixClient
 
 @pytest.fixture
 def client():

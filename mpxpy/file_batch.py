@@ -1,9 +1,9 @@
 import time
 import requests
 from typing import Optional
-from mathpix.pdf import Pdf
-from mathpix.auth import Auth
-from mathpix.logger import logger
+from mpxpy.pdf import Pdf
+from mpxpy.auth import Auth
+from mpxpy.logger import logger
 
 
 class FileBatch:
