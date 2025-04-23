@@ -56,11 +56,13 @@ class Conversion:
             logger.info(f'Checking conversion status... ({attempt}/{timeout})')
             conversion_status = self.conversion_status()
             if (conversion_status['status'] == 'completed' and all(
-                    format_data['status'] == 'completed'
+                    format_data['status'] == 'completed' or format_data['status'] == 'error'
                     for _, format_data in conversion_status['conversion_status'].items()
             )):
                 completed = True
                 logger.info(f"Conversion {self.conversion_id} completed successfully")
+                break
+            elif conversion_status['status'] == 'error':
                 break
             time.sleep(1)
             attempt += 1
