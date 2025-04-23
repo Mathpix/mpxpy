@@ -69,7 +69,7 @@ pdf_file.download_output_to_local_path("docx", "./output")
 pdf_file.download_output_to_local_path("md", "./output")
 ```
 
-### Process an Image with Math Content
+### Process an Image
 
 ```python
 from mpxpy.mathpix_client import MathpixClient

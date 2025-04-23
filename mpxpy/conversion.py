@@ -4,6 +4,7 @@ import requests
 from typing import Optional
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
+from mpxpy.errors import ConversionIncompleteError
 
 
 class Conversion:
@@ -35,17 +36,19 @@ class Conversion:
             logger.error("Conversion requires a Conversion ID")
             raise ValueError("Conversion requires a Conversion ID")
 
-    def wait_until_complete(self, timeout: int=None):
+    def wait_until_complete(self, timeout: int=60):
         """Wait for the conversion to complete.
 
         Polls the conversion status until it's complete or the timeout is reached.
 
         Args:
-            timeout: Maximum number of seconds to wait. Each second makes one status check.
+            timeout: Maximum number of seconds to wait. Must be a positive, non-zero integer.
 
         Returns:
             bool: True if the conversion completed successfully, False if it timed out.
         """
+        if not isinstance(timeout, int) or timeout <= 0:
+            raise ValueError("Timeout must be a positive, non-zero integer")
         logger.info(f"Waiting for conversion {self.conversion_id} to complete (timeout: {timeout}s)")
         attempt = 1
         completed = False
@@ -72,7 +75,7 @@ class Conversion:
             dict: JSON response containing conversion status information.
         """
         logger.info(f"Getting status for conversion {self.conversion_id}")
-        endpoint = self.auth.api_url + '/v3/converter/' + self.conversion_id
+        endpoint = os.path.join(self.auth.api_url, 'v3/converter', self.conversion_id)
         response = requests.get(endpoint, headers=self.auth.headers)
         return response.json()
 
@@ -87,7 +90,7 @@ class Conversion:
             bytes: The binary content of the conversion result.
         """
         logger.info(f"Downloading output for conversion {self.conversion_id} in format: {format}")
-        endpoint = self.auth.api_url + '/v3/converter/' + self.conversion_id
+        endpoint = os.path.join(self.auth.api_url, 'v3/converter', self.conversion_id)
         if format:
             endpoint = endpoint + '.' + format
         response = requests.get(endpoint, headers=self.auth.headers)
@@ -104,7 +107,7 @@ class Conversion:
             str: The path to the saved file.
         """
         logger.info(f"Downloading conversion {self.conversion_id} in format {format} to path {path}")
-        endpoint = self.auth.api_url + '/v3/converter/' + self.conversion_id
+        endpoint = os.path.join(self.auth.api_url, 'v3/converter', self.conversion_id)
         if format:
             endpoint = endpoint + '.' + format
         response = requests.get(endpoint, headers=self.auth.headers)

@@ -4,6 +4,8 @@ import requests
 from typing import Optional
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
+from mpxpy.errors import ConversionIncompleteError
+
 
 class Pdf:
     """Manages a Mathpix PDF conversion through the v3/pdf endpoint.
@@ -34,20 +36,22 @@ class Pdf:
             logger.error("PDF requires a PDF ID")
             raise ValueError("PDF requires a PDF ID")
 
-    def wait_until_complete(self, timeout: int=None, ignore_conversions: bool=False):
+    def wait_until_complete(self, timeout: int=60, ignore_conversions: bool=False):
         """Wait for the PDF processing and optional conversions to complete.
 
         Polls the PDF status until it's complete, then optionally checks conversion status
         until all conversions are complete or the timeout is reached.
 
         Args:
-            timeout: Maximum number of seconds to wait. Each second makes one status check.
+            timeout: Maximum number of seconds to wait. Must be a positive, non-zero integer.
             ignore_conversions: If True, only waits for PDF processing and ignores conversion status.
 
         Returns:
             bool: True if the processing (and conversions, if not ignored) completed successfully,
                   False if it timed out.
         """
+        if not isinstance(timeout, int) or timeout <= 0:
+            raise ValueError("Timeout must be a positive, non-zero integer")
         logger.info(f"Waiting for PDF {self.pdf_id} to complete (timeout: {timeout}s, ignore_conversions: {ignore_conversions})")
         attempt = 1
         pdf_completed = False
@@ -106,7 +110,7 @@ class Pdf:
             dict: JSON response containing PDF processing status information.
         """
         logger.info(f"Getting status for PDF {self.pdf_id}")
-        endpoint = self.auth.api_url + '/v3/pdf/' + self.pdf_id
+        endpoint = os.path.join(self.auth.api_url, 'v3/pdf', self.pdf_id)
         response = requests.get(endpoint, headers=self.auth.headers)
         return response.json()
 
@@ -117,11 +121,11 @@ class Pdf:
             dict: JSON response containing conversion status information.
         """
         logger.info(f"Getting conversion status for PDF {self.pdf_id}")
-        endpoint = self.auth.api_url + '/v3/converter/' + self.pdf_id
+        endpoint = os.path.join(self.auth.api_url, 'v3/converter', self.pdf_id)
         response = requests.get(endpoint, headers=self.auth.headers)
         return response.json()
 
-    def download_output(self, format: Optional[str]=None):
+    def download_output(self, format: Optional[str]='pdf'):
         """Download the processed PDF result.
 
         Args:
@@ -132,13 +136,17 @@ class Pdf:
             bytes: The binary content of the result.
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format: {format}")
-        endpoint = self.auth.api_url + '/v3/pdf/' + self.pdf_id
-        if format:
-            endpoint = endpoint + '.' + format
+        endpoint = os.path.join(self.auth.api_url, 'v3/pdf', self.pdf_id, f'.{format}')
         response = requests.get(endpoint, headers=self.auth.headers)
+        if response.status_code == 404:
+            status_info = response.json()
+            raise ConversionIncompleteError(
+                f"Conversion not complete: {status_info.get('num_pages_completed', 0)}/{status_info.get('num_pages')} pages",
+                status_info=status_info
+            )
         return response.content
 
-    def download_output_to_local_path(self, format: Optional[str] = None, path: Optional[str] = None):
+    def download_output_to_local_path(self, format: Optional[str] = 'pdf', path: Optional[str] = None):
         """Download the processed PDF (or optional conversion) result and save it to a local path.
 
         Args:

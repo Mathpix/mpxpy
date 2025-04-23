@@ -8,10 +8,7 @@ from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
-
-
-class MathpixClientError(Exception):
-    pass
+from mpxpy.errors import MathpixClientError
 
 
 class MathpixClient:
@@ -202,7 +199,7 @@ class MathpixClient:
             logger.error(f"File batch creation failed: {e}")
             raise MathpixClientError(f"Mathpix request failed: {e}")
 
-    def conversion_new(self, mmd: str, formats: Dict[str, any]):
+    def conversion_new(self, mmd: str, formats: Dict[str, bool]):
         """Create a new conversion from Mathpix Markdown.
 
         Converts Mathpix Markdown (MMD) to various output formats.

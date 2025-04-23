@@ -1,5 +1,6 @@
 import json
 from pathlib import Path
+import os
 import requests
 from typing import Optional
 from mpxpy.auth import Auth
@@ -60,7 +61,7 @@ class Image:
             ValueError: If the API request fails.
         """
         logger.info(f"Processing image: path={self.file_path}, url={self.file_url}, include_line_data={include_line_data}")
-        endpoint = self.auth.api_url + '/v3/text'
+        endpoint = os.path.join(self.auth.api_url, 'v3/text')
         options = {
             "include_line_data": include_line_data
         }

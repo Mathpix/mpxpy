@@ -1,5 +1,6 @@
 import time
 import requests
+import os
 from typing import Optional
 from mpxpy.pdf import Pdf
 from mpxpy.auth import Auth
@@ -47,7 +48,7 @@ class FileBatch:
                  files are either completed or have errored out.
         """
         logger.info(f"Checking if file batch {self.file_batch_id} is still processing")
-        endpoint = f"{self.auth.api_url}/v3/file-batches/{self.file_batch_id}"
+        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id)
         response = requests.get(endpoint, headers=self.auth.headers)
         response_json = response.json()
         total_files = response_json["total_files"]
@@ -65,7 +66,7 @@ class FileBatch:
                  of total, completed, and error files.
         """
         logger.info(f"Getting status for file batch {self.file_batch_id}")
-        endpoint = f"{self.auth.api_url}/v3/file-batches/{self.file_batch_id}"
+        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id)
         response = requests.get(endpoint, headers=self.auth.headers)
         return response.json()
 
@@ -82,7 +83,7 @@ class FileBatch:
                 - 'has_more': Boolean indicating if more pages are available
         """
         logger.info(f"Retrieving files for batch {self.file_batch_id}")
-        endpoint = f"{self.auth.api_url}/v3/file-batches/{self.file_batch_id}/files"
+        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id, 'files')
         if cursor:
             endpoint += f"?cursor={cursor}"
         response = requests.get(endpoint, headers=self.auth.headers)
@@ -103,12 +104,14 @@ class FileBatch:
         or until the timeout is reached.
 
         Args:
-            timeout: Maximum number of seconds to wait.
+            timeout: Maximum number of seconds to wait. Must be a positive, non-zero integer.
 
         Returns:
             bool: True if all files completed processing (successfully or with errors),
                   False if the timeout was reached before completion.
         """
+        if not isinstance(timeout, int) or timeout <= 0:
+            raise ValueError("Timeout must be a positive, non-zero integer")
         logger.info(f"Waiting for file batch {self.file_batch_id} to complete (timeout: {timeout}s)")
         attempts = 1
         completed = False
