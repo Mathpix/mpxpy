@@ -12,11 +12,19 @@ pip install mpxpy
 
 You'll need a Mathpix API app_id and app_key to use this client. You can get these from the [Mathpix Console](https://console.mathpix.com/).
 
-Set your credentials using either environment variables or pass them directly when initializing the client. MathpixClient will prioritize auth configs passed through arguments over ENV vars
+Set your credentials by either:
+- Using environment variables
+- Passing them directly when initializing the client
+
+MathpixClient will prioritize auth configs in the following order:
+1. Passed through arguments
+2. The `~/.mpx/config` file
+3. ENV vars located in `.env`
+4. ENV vars located in `local.env`
 
 ### Using environment variables
 
-Create a `local.env` file:
+Create a config file at `~/.mpx/config` or add ENV variables to `.env` or `local.env` files:
 
 ```
 MATHPIX_APP_ID=your-app-id
@@ -40,7 +48,14 @@ Then initialize the client:
 ```python
 from mpxpy.mathpix_client import MathpixClient
 
-client = MathpixClient()  # Will use environment variables
+# Will use ~/.mpx/config or environment variables
+client = MathpixClient()
+
+# Will use passed arguments
+client = MathpixClient(
+    app_id="your-app-id",
+    app_key="your-app-key"
+)
 ```
 
 ## Features
@@ -50,7 +65,10 @@ client = MathpixClient()  # Will use environment variables
 ```python
 from mpxpy.mathpix_client import MathpixClient
 
-client = MathpixClient()
+client = MathpixClient(
+    app_id="your-app-id",
+    app_key="your-app-key"
+)
 
 # Process a PDF file
 pdf_file = client.pdf_new(
@@ -74,8 +92,10 @@ pdf_file.download_output_to_local_path("md", "./output")
 ```python
 from mpxpy.mathpix_client import MathpixClient
 
-client = MathpixClient()
-
+client = MathpixClient(
+    app_id="your-app-id",
+    app_key="your-app-key"
+)
 # Process an image file
 image = client.image_new(
     file_url="https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
@@ -87,6 +107,7 @@ print(mmd)
 
 # Get line-by-line OCR data
 lines = image.lines_json()
+print(lines)
 ```
 
 ### Convert Mathpix Markdown (MMD)
@@ -94,36 +115,48 @@ lines = image.lines_json()
 ```python
 from mpxpy.mathpix_client import MathpixClient
 
-client = MathpixClient()
-
+client = MathpixClient(
+    app_id="your-app-id",
+    app_key="your-app-key"
+)
 # Convert Mathpix Markdown to various formats
 conversion = client.conversion_new(
     mmd="\\frac{1}{2}",
-    formats={"latex": {}}
+    conversion_formats={"docx": True}
 )
 
 # Wait for conversion to complete
 conversion.wait_until_complete(timeout=30)
 
 # Download the converted output
-latex_output = conversion.download_output("latex")
+docx_output = conversion.download_output("docx")
 ```
 
 ## Error Handling
 
-The client provides detailed error information:
+The client provides detailed error information in the following classes:
+- MathpixClientError
+- AuthenticationError
+- ValidationError
+- FilesystemError
+- ConversionIncompleteError
 
 ```python
-from mpxpy.mathpix_client import MathpixClient, MathpixClientError
+from mpxpy.mathpix_client import MathpixClient
+from mpxpy.errors import MathpixClientError, ConversionIncompleteError
 
 client = MathpixClient(app_id="your-app-id", app_key="your-app-key")
 
 try:
-    pdf_file = client.pdf_new(file_path="nonexistent.pdf")
+    pdf = client.pdf_new(file_path="example.pdf", conversion_formats={'docx': True})
 except FileNotFoundError as e:
     print(f"File not found: {e}")
 except MathpixClientError as e:
-    print(f"API error: {e}")
+    print(f"File upload error: {e}")
+try:
+    pdf.download_output_to_local_path('docx', 'output/path')
+except ConversionIncompleteError as e:
+    print(f'Conversions are not complete')
 ```
 
 ## Development

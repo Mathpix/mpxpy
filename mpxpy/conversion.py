@@ -48,9 +48,12 @@ class Conversion:
 
         Returns:
             bool: True if the conversion completed successfully, False if it timed out.
+
+        Raises:
+            ValidationError: If timeout is an invalid value
         """
         if not isinstance(timeout, int) or timeout <= 0:
-            raise ValueError("Timeout must be a positive, non-zero integer")
+            raise ValidationError("Timeout must be a positive, non-zero integer")
         logger.info(f"Waiting for conversion {self.conversion_id} to complete (timeout: {timeout}s)")
         attempt = 1
         completed = False
@@ -83,7 +86,7 @@ class Conversion:
         response = get(endpoint, headers=self.auth.headers)
         return response.json()
 
-    def download_output(self, conversion_format: Optional[str]=None):
+    def download_output(self, conversion_format: Optional[str]="pdf"):
         """Download the conversion result.
 
         Args:
@@ -92,28 +95,44 @@ class Conversion:
 
         Returns:
             bytes: The binary content of the conversion result.
+
+        Raises:
+            ConversionIncompleteError: If the specified format's conversion is not complete.
         """
         logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
         endpoint = os.path.join(self.auth.api_url, 'v3/converter', f'{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
+        try:
+            data = response.json()
+        except ValueError:
+            return response.content
+        if 'conversion_status' in data and conversion_format in data['conversion_status']:
+            status = data['conversion_status'][conversion_format].get('status')
+            if status != 'completed':
+                raise ConversionIncompleteError(
+                    f"Conversion to {conversion_format} is not complete (status: {status})"
+                )
         return response.content
 
-    def download_output_to_local_path(self, conversion_format: Optional[str] = None, path: Optional[str] = ""):
+    def download_output_to_local_path(self, conversion_format: Optional[str] = "pdf", path: Optional[str] = ""):
         """Download the conversion result and save it to a local file.
 
         Args:
-            conversion_format: Output format extension (e.g., 'docx', 'pdf', 'tex').
+            conversion_format: Output format extension (e.g., 'docx', 'pdf', 'latex.pdf').
             path: Directory path where the file should be saved. Will be created if it doesn't exist.
 
         Returns:
             str: The path to the saved file.
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+            FilesystemError: If output fails to save to the local path
         """
         logger.info(f"Downloading conversion {self.conversion_id} in format {conversion_format} to path {path}")
-        conversion_status = self.conversion_status()
-        if not 'conversion_status' in conversion_status or conversion_status['conversion_status'][conversion_format]['status'] != 'completed':
-            raise ConversionIncompleteError("Conversion not complete")
         endpoint = os.path.join(self.auth.api_url, 'v3/converter', f'{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
+        if response.status_code == 404:
+            raise ConversionIncompleteError("Conversion not complete")
         if path != "":
             os.makedirs(path, exist_ok=True)
         file_path = os.path.join(path, f'{self.conversion_id}.{conversion_format}')

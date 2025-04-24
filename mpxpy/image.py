@@ -5,6 +5,7 @@ import requests
 from typing import Optional
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
+from mpxpy.errors import AuthenticationError, ValidationError
 
 
 class Image:
@@ -26,21 +27,22 @@ class Image:
             file_url: URL of a remote image.
 
         Raises:
-            ValueError: If auth is not provided, if neither file_path nor file_url is provided,
+            AuthenticationError: If auth is not provided
+            ValidationError: If neither file_path nor file_url is provided,
                         or if both file_path and file_url are provided.
         """
         self.auth = auth
         if not self.auth:
             logger.error("Image requires an authenticated client")
-            raise ValueError("Image requires an authenticated client")
+            raise AuthenticationError("Image requires an authenticated client")
         self.file_path = file_path or ''
         self.file_url = file_url or ''
         if not self.file_path and not self.file_url:
             logger.error("Image requires a file path or file URL")
-            raise ValueError("Image requires a file path or file URL")
+            raise ValidationError("Image requires a file path or file URL")
         if self.file_path and self.file_url:
             logger.error("Exactly one of file path or file URL must be provider")
-            raise ValueError("Exactly one of file path or file URL must be provider")
+            raise ValidationError("Exactly one of file path or file URL must be provider")
 
     def results(
             self,

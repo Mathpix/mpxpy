@@ -12,7 +12,7 @@ def client():
 
 
 def test_pdf_convert_remote_file(client):
-    pdf_file_url = "http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf"
+    pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf_file = client.pdf_new(
         file_url=pdf_file_url,
         webhook_url="http://gateway:8080/webhook/convert-api",
@@ -28,7 +28,7 @@ def test_pdf_convert_remote_file(client):
     assert status['status'] == 'completed'
 
 def test_pdf_convert_remote_file_to_docx(client):
-    pdf_file_url = "http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf"
+    pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf_file = client.pdf_new(
         file_url=pdf_file_url,
         webhook_url="http://gateway:8080/webhook/convert-api",
@@ -116,12 +116,9 @@ def test_pdf_get_result_bytes(client):
 
 
 if __name__ == '__main__':
-    # test_pdf_convert_remote_file(client())
-    # test_pdf_convert_local_file(client())
-    # test_pdf_download_conversion(client())
-    # test_pdf_get_result_bytes(client())
     client = MathpixClient()
-    pdf = client.pdf_new(file_url="http://localhost:0000")
-    print(pdf.pdf_id)
-    pdf.wait_until_complete(timeout=10)
-    print(pdf.pdf_status())
+    # test_pdf_convert_remote_file(client)
+    # test_pdf_convert_remote_file_to_docx(client)
+    # test_pdf_convert_local_file(client)
+    # test_pdf_download_conversion(client)
+    # test_pdf_get_result_bytes(client)

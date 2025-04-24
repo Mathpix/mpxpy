@@ -21,4 +21,3 @@ class ConversionIncompleteError(MathpixClientError):
     """Exception raised when a conversion is not complete."""
     def __init__(self, message, status_info=None):
         super().__init__(message)
-        self.status_info = status_info or {}

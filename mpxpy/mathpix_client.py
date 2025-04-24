@@ -53,7 +53,7 @@ class MathpixClient:
             Image: A new Image instance.
 
         Raises:
-            ValueError: If neither or both file_path and file_url are provided.
+            ValueError: If exactly one of file_path and file_url are not provided.
         """
         if (file_path is None and file_url is None) or (file_path is not None and file_url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or file_url must be provided")
@@ -247,6 +247,9 @@ class MathpixClient:
             response = post(endpoint, json=options, headers=self.auth.headers)
             response.raise_for_status()
             response_json = response.json()
+            if 'error' in response_json:
+                logger.error(f"Conversion failed: {response_json}")
+                raise MathpixClientError(f"Conversion failed: {response_json}")
             conversion_id = response_json['conversion_id']
             logger.info(f"Conversion created, ID: {conversion_id}")
             return Conversion(auth=self.auth, conversion_id=conversion_id, conversion_formats=conversion_formats)

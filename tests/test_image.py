@@ -42,7 +42,7 @@ def test_simple_conversion_from_image_output(client):
     )
     mmd = image_file.mmd()
     assert mmd is not None and len(mmd) > 0
-    conversion = client.conversion_new(mmd=mmd, formats={"docx": True})
+    conversion = client.conversion_new(mmd=mmd, conversion_formats={"docx": True})
     completed = conversion.wait_until_complete(timeout=20)
     assert completed, "Conversion from MMD did not complete"
     output_dir = "output"
@@ -56,6 +56,7 @@ def test_simple_conversion_from_image_output(client):
 
 
 if __name__ == '__main__':
-    test_simple_image_convert_remote_file(client())
-    test_simple_image_convert_local_file(client())
-    test_simple_conversion_from_image_output(client())
+    client = MathpixClient()
+    # test_simple_image_convert_remote_file(client)
+    # test_simple_image_convert_local_file(client)
+    # test_simple_conversion_from_image_output(client)

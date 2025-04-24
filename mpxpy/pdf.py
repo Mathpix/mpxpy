@@ -99,7 +99,7 @@ class Pdf:
                 logger.error(f"Exception during PDF status check: {e}")
             attempt += 1
             time.sleep(1)
-        if (pdf_completed and len(self.conversion_formats.items()) > 0) or ignore_conversions:
+        if pdf_completed and self.conversion_formats and not ignore_conversions:
             logger.info(f"Checking conversion status for PDF {self.pdf_id}")
             while attempt < timeout and not conversion_completed:
                 try:
@@ -125,7 +125,7 @@ class Pdf:
                     logger.error(f"Exception during conversion status check: {e}")
                 attempt += 1
                 time.sleep(1)
-        result = pdf_completed and (conversion_completed or ignore_conversions)
+        result = pdf_completed and (conversion_completed or ignore_conversions or not self.conversion_formats)
         logger.info(f"Wait completed for PDF {self.pdf_id}, result: {result}")
         return result
 
@@ -160,12 +160,25 @@ class Pdf:
 
         Returns:
             bytes: The binary content of the result.
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
         endpoint = os.path.join(self.auth.api_url, 'v3/pdf', f'{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
+        # try:
+        #     data = response.json()
+        # except ValueError:
+        #     return response.content
+        # if 'conversion_status' in data and conversion_format in data['conversion_status']:
+        #     status = data['conversion_status'][conversion_format].get('status')
+        #     if status != 'completed':
+        #         raise ConversionIncompleteError(
+        #             f"Conversion to {conversion_format} is not complete (status: {status})"
+        #         )
         return response.content
 
     def download_output_to_local_path(self, conversion_format: Optional[str] = 'pdf', path: Optional[str] = ""):
@@ -177,13 +190,16 @@ class Pdf:
 
         Returns:
             str: The path to the saved file.
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+            FilesystemError: If output fails to save to the local path
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
-        pdf_status = self.pdf_conversion_status()
-        if not 'conversion_status' in pdf_status or pdf_status['conversion_status'][conversion_format]['status'] != 'completed':
-            raise ConversionIncompleteError("Conversion not complete")
         endpoint = os.path.join(self.auth.api_url, 'v3/pdf', f'{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
+        if response.status_code == 404:
+            raise ConversionIncompleteError("Conversion not complete")
         if path != "":
             os.makedirs(path, exist_ok=True)
         file_path = os.path.join(path, f'{self.pdf_id}.{conversion_format}')
