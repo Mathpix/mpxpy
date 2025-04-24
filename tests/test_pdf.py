@@ -116,7 +116,12 @@ def test_pdf_get_result_bytes(client):
 
 
 if __name__ == '__main__':
-    test_pdf_convert_remote_file(client())
-    test_pdf_convert_local_file(client())
-    test_pdf_download_conversion(client())
-    test_pdf_get_result_bytes(client())
+    # test_pdf_convert_remote_file(client())
+    # test_pdf_convert_local_file(client())
+    # test_pdf_download_conversion(client())
+    # test_pdf_get_result_bytes(client())
+    client = MathpixClient()
+    pdf = client.pdf_new(file_url="http://localhost:0000")
+    print(pdf.pdf_id)
+    pdf.wait_until_complete(timeout=10)
+    print(pdf.pdf_status())

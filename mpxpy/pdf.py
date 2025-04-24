@@ -1,10 +1,10 @@
 import os
 import time
-import requests
-from typing import Optional
+from typing import Optional, Dict, Any, List
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
-from mpxpy.errors import ConversionIncompleteError
+from mpxpy.errors import ValidationError, ConversionIncompleteError, FilesystemError
+from mpxpy.request_handler import get
 
 
 class Pdf:
@@ -16,8 +16,28 @@ class Pdf:
     Attributes:
         auth: An Auth instance with Mathpix credentials.
         pdf_id: The unique identifier for this PDF.
+        file_path: Path to a local PDF file.
+        file_url: URL of a remote PDF file.
+        file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
+        webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
+        mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
+        webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
+        webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+        conversion_formats: Optional dict of formats to convert to (e.g. {"docx": True}).
     """
-    def __init__(self, auth: Auth, pdf_id: str = None):
+    def __init__(
+            self,
+            auth: Auth,
+            pdf_id: str = None,
+            file_path: Optional[str] = None,
+            file_url: Optional[str] = None,
+            file_batch_id: Optional[str] = None,
+            webhook_url: Optional[str] = None,
+            mathpix_webhook_secret: Optional[str] = None,
+            webhook_payload: Optional[Dict[str, Any]] = None,
+            webhook_enabled_events: Optional[List[str]] = None,
+            conversion_formats: Optional[Dict[str, bool]] = None
+    ):
         """Initialize a PDF instance.
 
         Args:
@@ -30,11 +50,19 @@ class Pdf:
         self.auth = auth
         if not self.auth:
             logger.error("PDF requires an authenticated client")
-            raise ValueError("PDF requires an authenticated client")
+            raise ValidationError("PDF requires an authenticated client")
         self.pdf_id = pdf_id or ''
         if not self.pdf_id:
             logger.error("PDF requires a PDF ID")
-            raise ValueError("PDF requires a PDF ID")
+            raise ValidationError("PDF requires a PDF ID")
+        self.file_path = file_path
+        self.file_url = file_url
+        self.file_batch_id = file_batch_id
+        self.webhook_url = webhook_url
+        self.mathpix_webhook_secret = mathpix_webhook_secret
+        self.webhook_payload = webhook_payload
+        self.webhook_enabled_events = webhook_enabled_events
+        self.conversion_formats = conversion_formats
 
     def wait_until_complete(self, timeout: int=60, ignore_conversions: bool=False):
         """Wait for the PDF processing and optional conversions to complete.
@@ -66,14 +94,12 @@ class Pdf:
                     break
                 elif isinstance(status, dict) and 'error' in status:
                     logger.error(f"Error in PDF {self.pdf_id} processing: {status.get('error')}")
-                else:
-                    ignore_conversions = True
                 logger.info(f"PDF {self.pdf_id} processing in progress, waiting...")
             except Exception as e:
                 logger.error(f"Exception during PDF status check: {e}")
             attempt += 1
             time.sleep(1)
-        if pdf_completed and not ignore_conversions:
+        if (pdf_completed and len(self.conversion_formats.items()) > 0) or ignore_conversions:
             logger.info(f"Checking conversion status for PDF {self.pdf_id}")
             while attempt < timeout and not conversion_completed:
                 try:
@@ -111,7 +137,7 @@ class Pdf:
         """
         logger.info(f"Getting status for PDF {self.pdf_id}")
         endpoint = os.path.join(self.auth.api_url, 'v3/pdf', self.pdf_id)
-        response = requests.get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers)
         return response.json()
 
     def pdf_conversion_status(self):
@@ -122,51 +148,51 @@ class Pdf:
         """
         logger.info(f"Getting conversion status for PDF {self.pdf_id}")
         endpoint = os.path.join(self.auth.api_url, 'v3/converter', self.pdf_id)
-        response = requests.get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers)
         return response.json()
 
-    def download_output(self, format: Optional[str]='pdf'):
+    def download_output(self, conversion_format: Optional[str]='pdf'):
         """Download the processed PDF result.
 
         Args:
-            format: Optional output format extension (e.g., 'docx', 'md', 'tex').
+            conversion_format: Optional output format extension (e.g., 'docx', 'md', 'tex').
                    If not provided, returns the default PDF result.
 
         Returns:
             bytes: The binary content of the result.
         """
-        logger.info(f"Downloading output for PDF {self.pdf_id} in format: {format}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/pdf', self.pdf_id, f'.{format}')
-        response = requests.get(endpoint, headers=self.auth.headers)
+        logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
+        endpoint = os.path.join(self.auth.api_url, 'v3/pdf', f'{self.pdf_id}.{conversion_format}')
+        response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
-            status_info = response.json()
-            raise ConversionIncompleteError(
-                f"Conversion not complete: {status_info.get('num_pages_completed', 0)}/{status_info.get('num_pages')} pages",
-                status_info=status_info
-            )
+            raise ConversionIncompleteError("Conversion not complete")
         return response.content
 
-    def download_output_to_local_path(self, format: Optional[str] = 'pdf', path: Optional[str] = None):
+    def download_output_to_local_path(self, conversion_format: Optional[str] = 'pdf', path: Optional[str] = ""):
         """Download the processed PDF (or optional conversion) result and save it to a local path.
 
         Args:
-            format: Output format extension (e.g., 'docx', 'md', 'tex').
+            conversion_format: Output format extension (e.g., 'docx', 'md', 'tex').
             path: Directory path where the file should be saved. Will be created if it doesn't exist.
 
         Returns:
             str: The path to the saved file.
         """
-        logger.info(f"Downloading output for PDF {self.pdf_id} in format {format} to path {path}")
-        endpoint = self.auth.api_url + '/v3/pdf/' + self.pdf_id
-        if format:
-            endpoint = endpoint + '.' + format
-        response = requests.get(endpoint, headers=self.auth.headers)
-        os.makedirs(path, exist_ok=True)
-        file_path = f"{path}/{self.pdf_id}.{format}"
-        print(file_path)
-        with open(file_path, 'wb') as f:
-            for chunk in response.iter_content(chunk_size=8192):
-                if chunk:
-                    f.write(chunk)
+        logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
+        pdf_status = self.pdf_conversion_status()
+        if not 'conversion_status' in pdf_status or pdf_status['conversion_status'][conversion_format]['status'] != 'completed':
+            raise ConversionIncompleteError("Conversion not complete")
+        endpoint = os.path.join(self.auth.api_url, 'v3/pdf', f'{self.pdf_id}.{conversion_format}')
+        response = get(endpoint, headers=self.auth.headers)
+        if path != "":
+            os.makedirs(path, exist_ok=True)
+        file_path = os.path.join(path, f'{self.pdf_id}.{conversion_format}')
+        try:
+            with open(file_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk:
+                        f.write(chunk)
+        except Exception:
+            raise FilesystemError('Failed to save file to system')
         logger.info(f"File saved successfully to {file_path}")
         return file_path

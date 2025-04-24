@@ -1,4 +1,6 @@
 import json
+import os
+
 import requests
 from typing import Dict, Any, Optional, List
 from pathlib import Path
@@ -9,6 +11,7 @@ from mpxpy.conversion import Conversion
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
 from mpxpy.errors import MathpixClientError
+from mpxpy.request_handler import post
 
 
 class MathpixClient:
@@ -88,7 +91,7 @@ class MathpixClient:
             conversion_formats: Optional dict of formats to convert to (e.g. {"docx": True}).
 
         Returns:
-            Pdf: A new Pdf instance with the processed PDF ID.
+            Pdf: A new Pdf instance
 
         Raises:
             ValueError: If neither file_path nor file_url, or both file_path and file_url are provided.
@@ -113,7 +116,7 @@ class MathpixClient:
         if (file_path is None and file_url is None) or (file_path is not None and file_url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or file_url must be provided")
             raise ValueError("Exactly one of file_path or file_url must be provided")
-        endpoint = f"{self.auth.api_url}/v3/pdf"
+        endpoint = os.path.join(self.auth.api_url, 'v3/pdf')
         options = {
             "math_inline_delimiters": ["$", "$"],
             "rm_spaces": True
@@ -142,12 +145,22 @@ class MathpixClient:
             with path.open("rb") as pdf_file:
                 files = {"file": pdf_file}
                 try:
-                    response = requests.post(endpoint, data=data, files=files, headers=self.auth.headers)
+                    response = post(endpoint, data=data, files=files, headers=self.auth.headers)
                     response.raise_for_status()
                     response_json = response.json()
                     pdf_id = response_json['pdf_id']
                     logger.info(f"PDF from local path processing started, PDF ID: {pdf_id}")
-                    return Pdf(auth=self.auth, pdf_id=pdf_id)
+                    return Pdf(
+                        auth=self.auth,
+                        pdf_id=pdf_id,
+                        file_path=file_path,
+                        file_batch_id=file_batch_id,
+                        webhook_url=webhook_url,
+                        mathpix_webhook_secret=mathpix_webhook_secret,
+                        webhook_payload=webhook_payload,
+                        webhook_enabled_events=webhook_enabled_events,
+                        conversion_formats=conversion_formats
+                    )
                 except requests.exceptions.RequestException as e:
                     logger.error(f"PDF upload failed: {e}")
                     raise MathpixClientError(f"Mathpix PDF request failed: {e}")
@@ -155,13 +168,23 @@ class MathpixClient:
             logger.info(f"Creating new PDF: url={file_url}")
             options["url"] = file_url
             try:
-                response = requests.post(endpoint, json=options, headers=self.auth.headers)
+                response = post(endpoint, json=options, headers=self.auth.headers)
                 response.raise_for_status()
                 response_json = response.json()
                 logger.info(response_json)
                 pdf_id = response_json['pdf_id']
                 logger.info(f"PDF from URL processing started, PDF ID: {pdf_id}")
-                return Pdf(auth=self.auth, pdf_id=pdf_id)
+                return Pdf(
+                        auth=self.auth,
+                        pdf_id=pdf_id,
+                        file_url=file_url,
+                        file_batch_id=file_batch_id,
+                        webhook_url=webhook_url,
+                        mathpix_webhook_secret=mathpix_webhook_secret,
+                        webhook_payload=webhook_payload,
+                        webhook_enabled_events=webhook_enabled_events,
+                        conversion_formats=conversion_formats
+                    )
             except requests.exceptions.RequestException as e:
                 logger.error(f"URL processing failed: {e}")
                 raise MathpixClientError(f"Mathpix PDF request failed: {e}")
@@ -187,9 +210,9 @@ class MathpixClient:
                 "This feature will be enabled in a future release."
             )
         logger.info("Creating new file batch")
-        file_batch_post_url = self.auth.api_url + '/v3/file-batches'
+        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches')
         try:
-            response = requests.post(file_batch_post_url, headers=self.auth.headers)
+            response = post(endpoint, headers=self.auth.headers)
             response.raise_for_status()
             response_json = response.json()
             file_batch_id = response_json['file_batch_id']
@@ -199,14 +222,14 @@ class MathpixClient:
             logger.error(f"File batch creation failed: {e}")
             raise MathpixClientError(f"Mathpix request failed: {e}")
 
-    def conversion_new(self, mmd: str, formats: Dict[str, bool]):
+    def conversion_new(self, mmd: str, conversion_formats: Dict[str, bool]):
         """Create a new conversion from Mathpix Markdown.
 
         Converts Mathpix Markdown (MMD) to various output formats.
 
         Args:
             mmd: Mathpix Markdown content to convert.
-            formats: Dictionary specifying output formats and their options.
+            conversion_formats: Dictionary specifying output formats and their options.
 
         Returns:
             Conversion: A new Conversion instance.
@@ -214,19 +237,19 @@ class MathpixClient:
         Raises:
             MathpixClientError: If the API request fails.
         """
-        logger.info(f"Starting new MMD conversions to: {formats}")
-        convert_url = self.auth.api_url + '/v3/converter'
+        logger.info(f"Starting new MMD conversions to: {conversion_formats}")
+        endpoint = os.path.join(self.auth.api_url, 'v3/converter')
         options = {
             "mmd": mmd,
-            "formats": formats
+            "formats": conversion_formats
         }
         try:
-            response = requests.post(convert_url, json=options, headers=self.auth.headers)
+            response = post(endpoint, json=options, headers=self.auth.headers)
             response.raise_for_status()
             response_json = response.json()
             conversion_id = response_json['conversion_id']
             logger.info(f"Conversion created, ID: {conversion_id}")
-            return Conversion(auth=self.auth, conversion_id=conversion_id)
+            return Conversion(auth=self.auth, conversion_id=conversion_id, conversion_formats=conversion_formats)
         except requests.exceptions.RequestException as e:
             logger.error(f"Conversion request failed: {e}")
             raise MathpixClientError(f"Conversion request failed: {e}")
