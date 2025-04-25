@@ -1,6 +1,8 @@
 import os
 import shutil
 import pytest
+
+from mpxpy.errors import ConversionIncompleteError, ValidationError
 from mpxpy.mathpix_client import MathpixClient
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -15,12 +17,6 @@ def test_pdf_convert_remote_file(client):
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf_file = client.pdf_new(
         file_url=pdf_file_url,
-        webhook_url="http://gateway:8080/webhook/convert-api",
-        mathpix_webhook_secret="test-secret",
-        webhook_payload={
-            "data": "test data"
-        },
-        webhook_enabled_events=["pdf_processing_complete"],
     )
     assert pdf_file.pdf_id is not None
     assert pdf_file.wait_until_complete(timeout=60)
@@ -31,12 +27,6 @@ def test_pdf_convert_remote_file_to_docx(client):
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf_file = client.pdf_new(
         file_url=pdf_file_url,
-        webhook_url="http://gateway:8080/webhook/convert-api",
-        mathpix_webhook_secret="test-secret",
-        webhook_payload={
-            "data": "test data"
-        },
-        webhook_enabled_events=["pdf_processing_complete"],
         conversion_formats={
             "docx": True
         }
@@ -52,12 +42,6 @@ def test_pdf_convert_local_file(client):
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf_file = client.pdf_new(
         file_path=pdf_file_path,
-        webhook_url="http://gateway:8080/webhook/convert-api",
-        mathpix_webhook_secret="test-secret",
-        webhook_payload={
-            "data": "test data"
-        },
-        webhook_enabled_events=["pdf_processing_complete"],
         conversion_formats={
             "docx": True
         }
@@ -73,12 +57,6 @@ def test_pdf_download_conversion(client):
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf_file = client.pdf_new(
         file_path=pdf_file_path,
-        webhook_url="http://gateway:8080/webhook/convert-api",
-        mathpix_webhook_secret="test-secret",
-        webhook_payload={
-            "data": "test data"
-        },
-        webhook_enabled_events=["pdf_processing_complete"],
         conversion_formats={
             "docx": True
         }
@@ -99,12 +77,6 @@ def test_pdf_get_result_bytes(client):
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf_file = client.pdf_new(
         file_path=pdf_file_path,
-        webhook_url="http://gateway:8080/webhook/convert-api",
-        mathpix_webhook_secret="test-secret",
-        webhook_payload={
-            "data": "test data"
-        },
-        webhook_enabled_events=["pdf_processing_complete"],
         conversion_formats={
             "docx": True
         }
@@ -114,6 +86,48 @@ def test_pdf_get_result_bytes(client):
     raw = pdf_file.download_output('md')
     assert raw is not None
 
+def test_pdf_download_to_local_path(client):
+    pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
+    pdf = client.pdf_new(
+        file_url=pdf_file_url,
+        conversion_formats={
+            "docx": True
+        }
+    )
+    assert pdf.pdf_id is not None
+    output_dir = pdf.pdf_id
+    try:
+        pdf.wait_until_complete(timeout=10)
+        path = pdf.download_output_to_local_path('docx', path=output_dir)
+        assert os.path.exists(path)
+        assert os.path.getsize(path) > 0
+    finally:
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+def test_pdf_download_output_incomplete_conversion(client):
+    pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
+    pdf_file = client.pdf_new(
+        file_url=pdf_file_url,
+        conversion_formats={
+            "docx": True
+        }
+    )
+    with pytest.raises(ConversionIncompleteError):
+        pdf_file.download_output(conversion_format='docx')
+
+def test_invalid_pdf_arguments(client):
+    pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/theres-plenty-of-room-at-the-bottom.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    with pytest.raises(ValidationError):
+        pdf = client.pdf_new(file_path=pdf_file_path, file_url=pdf_file_url)
+
+def test_bad_pdf_path(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/nonexistent.pdf")
+    with pytest.raises(FileNotFoundError):
+        pdf = client.pdf_new(file_path=pdf_file_path)
+
 
 if __name__ == '__main__':
     client = MathpixClient()
@@ -122,3 +136,16 @@ if __name__ == '__main__':
     # test_pdf_convert_local_file(client)
     # test_pdf_download_conversion(client)
     # test_pdf_get_result_bytes(client)
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/theres-plenty-of-room-at-the-bottom.pdf")
+    pdf_file = client.pdf_new(
+        file_path=pdf_file_path,
+        conversion_formats={
+            "docx": True,
+            "pdf": True,
+            "tex.zip": True
+        }
+    )
+    pdf_file.wait_until_complete(ignore_conversions=True)
+    print(pdf_file.pdf_status())
+    print(pdf_file.pdf_conversion_status())
+    pdf_file.download_output_to_local_path(conversion_format='docx',path='output')

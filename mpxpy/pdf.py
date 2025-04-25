@@ -169,16 +169,6 @@ class Pdf:
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
-        # try:
-        #     data = response.json()
-        # except ValueError:
-        #     return response.content
-        # if 'conversion_status' in data and conversion_format in data['conversion_status']:
-        #     status = data['conversion_status'][conversion_format].get('status')
-        #     if status != 'completed':
-        #         raise ConversionIncompleteError(
-        #             f"Conversion to {conversion_format} is not complete (status: {status})"
-        #         )
         return response.content
 
     def download_output_to_local_path(self, conversion_format: Optional[str] = 'pdf', path: Optional[str] = ""):

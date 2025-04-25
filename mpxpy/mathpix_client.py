@@ -4,13 +4,14 @@ import os
 import requests
 from typing import Dict, Any, Optional, List
 from pathlib import Path
+
 from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
-from mpxpy.errors import MathpixClientError
+from mpxpy.errors import MathpixClientError, ValidationError
 from mpxpy.request_handler import post
 
 
@@ -57,7 +58,7 @@ class MathpixClient:
         """
         if (file_path is None and file_url is None) or (file_path is not None and file_url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or file_url must be provided")
-            raise ValueError("Exactly one of file_path or file_url must be provided")
+            raise ValidationError("Exactly one of file_path or file_url must be provided")
         if file_path:
             logger.info(f"Creating new Image: path={file_path}")
             return Image(auth=self.auth, file_path=file_path)
@@ -115,7 +116,7 @@ class MathpixClient:
                 )
         if (file_path is None and file_url is None) or (file_path is not None and file_url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or file_url must be provided")
-            raise ValueError("Exactly one of file_path or file_url must be provided")
+            raise ValidationError("Exactly one of file_path or file_url must be provided")
         endpoint = os.path.join(self.auth.api_url, 'v3/pdf')
         options = {
             "math_inline_delimiters": ["$", "$"],
