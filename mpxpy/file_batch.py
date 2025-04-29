@@ -1,11 +1,18 @@
 import time
-import requests
 import os
-from typing import Optional
+from typing import Optional, List
+
+import requests
+from pydantic import BaseModel
+
 from mpxpy.pdf import Pdf
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
 
+class FilesResponse(BaseModel):
+    files: List[Pdf]
+    cursor: str
+    has_more: bool
 
 class FileBatch:
     """Manages a batch of Mathpix PDF processing requests.
@@ -70,17 +77,17 @@ class FileBatch:
         response = requests.get(endpoint, headers=self.auth.headers)
         return response.json()
 
-    def files(self, cursor: Optional[str] = None):
+    def files(self, cursor: Optional[str] = None) -> FilesResponse:
         """Retrieve the files in this batch, with pagination support.
 
         Args:
-            cursor: Optional pagination cursor for retrieving subsequent pages.
+            cursor (Optional[str]): Pagination cursor for retrieving subsequent pages.
 
         Returns:
-            dict: A dictionary containing:
-                - 'files': List of File objects in the current page
-                - 'cursor': Pagination cursor for the next page
-                - 'has_more': Boolean indicating if more pages are available
+            FilesResponse: An object containing:
+                - files (List[Pdf]): List of PDF objects in the current page.
+                - cursor (str): Pagination cursor for the next page.
+                - has_more (bool): Whether more pages of results are available.
         """
         logger.info(f"Retrieving files for batch {self.file_batch_id}")
         endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id, 'files')
@@ -88,14 +95,12 @@ class FileBatch:
             endpoint += f"?cursor={cursor}"
         response = requests.get(endpoint, headers=self.auth.headers)
         response_json = response.json()
-        files = []
-        for file in response_json['results']:
-            files.append(Pdf(pdf_id=file))
-        return {
-            'files': files,
-            'cursor': response_json['cursor'],
-            'has_more': response_json['has_more']
-        }
+        files = [Pdf(pdf_id=file) for file in response_json['results']]
+        return FilesResponse(
+            files=files,
+            cursor=response_json['cursor'],
+            has_more=response_json['has_more']
+        )
 
     def wait_until_complete(self, timeout: int = 60):
         """Wait for all files in the batch to complete processing.
