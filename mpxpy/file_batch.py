@@ -14,6 +14,10 @@ class FilesResponse(BaseModel):
     cursor: str
     has_more: bool
 
+    model_config = {
+        "arbitrary_types_allowed": True
+    }
+
 class FileBatch:
     """Manages a batch of Mathpix PDF processing requests.
 
