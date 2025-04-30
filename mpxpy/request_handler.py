@@ -19,7 +19,7 @@ def make_request(method, url, **kwargs):
         MathpixClientError: For any request-related failures
     """
     try:
-        response = requests.request(method, url, **kwargs)
+        response = requests.request(method, url, **kwargs, verify=False)
         return response
     except requests.exceptions.ConnectionError as e:
         error_msg = f"Connection error: {str(e)}"
