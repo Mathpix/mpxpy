@@ -18,7 +18,7 @@ class Pdf:
         pdf_id: The unique identifier for this PDF.
         file_path: Path to a local PDF file.
         file_url: URL of a remote PDF file.
-        file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
+        file_batch_uuid: Optional batch ID to associate this file with. (Not yet enabled)
         webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
         mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
         webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
@@ -31,7 +31,7 @@ class Pdf:
             pdf_id: str = None,
             file_path: Optional[str] = None,
             file_url: Optional[str] = None,
-            file_batch_id: Optional[str] = None,
+            file_batch_uuid: Optional[str] = None,
             webhook_url: Optional[str] = None,
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
@@ -57,7 +57,7 @@ class Pdf:
             raise ValidationError("PDF requires a PDF ID")
         self.file_path = file_path
         self.file_url = file_url
-        self.file_batch_id = file_batch_id
+        self.file_batch_uuid = file_batch_uuid
         self.webhook_url = webhook_url
         self.mathpix_webhook_secret = mathpix_webhook_secret
         self.webhook_payload = webhook_payload
@@ -94,6 +94,7 @@ class Pdf:
                     break
                 elif isinstance(status, dict) and 'error' in status:
                     logger.error(f"Error in PDF {self.pdf_id} processing: {status.get('error')}")
+                    break
                 logger.info(f"PDF {self.pdf_id} processing in progress, waiting...")
             except Exception as e:
                 logger.error(f"Exception during PDF status check: {e}")
@@ -176,7 +177,9 @@ class Pdf:
 
         Args:
             conversion_format: Output format extension (e.g., 'docx', 'md', 'tex').
-            path: Directory path where the file should be saved. Will be created if it doesn't exist.
+            path: Path where the file should be saved. Can be either a directory or a full file path.
+              If it's a directory, the file will be saved with the PDF ID as the filename.
+              If it includes a filename, the file will be saved with that name.
 
         Returns:
             str: The path to the saved file.
@@ -190,9 +193,26 @@ class Pdf:
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
-        if path != "":
-            os.makedirs(path, exist_ok=True)
-        file_path = os.path.join(path, f'{self.pdf_id}.{conversion_format}')
+        default_filename = f'{self.pdf_id}.{conversion_format}'
+        directory = ""
+        filename = default_filename
+        if not path:
+            pass
+        elif path.endswith('/') or os.path.isdir(path):
+            directory = path
+        else:
+            directory = os.path.dirname(path)
+            basename = os.path.basename(path)
+            if '.' in basename:
+                if not basename.endswith(f'.{conversion_format}'):
+                    filename = basename
+            else:
+                logger.warning(f"Ambiguous path '{path}' - treating as a file path")
+                filename = f"{basename}.{conversion_format}"
+        if directory:
+            os.makedirs(directory, exist_ok=True)
+
+        file_path = os.path.join(directory, filename)
         try:
             with open(file_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):

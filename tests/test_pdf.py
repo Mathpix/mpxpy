@@ -130,22 +130,32 @@ def test_bad_pdf_path(client):
 
 
 if __name__ == '__main__':
-    client = MathpixClient()
+    client = MathpixClient(api_url='http://localhost:8070')
     # test_pdf_convert_remote_file(client)
     # test_pdf_convert_remote_file_to_docx(client)
     # test_pdf_convert_local_file(client)
     # test_pdf_download_conversion(client)
     # test_pdf_get_result_bytes(client)
-    pdf_file_path = os.path.join(current_dir, "files/pdfs/theres-plenty-of-room-at-the-bottom.pdf")
-    pdf_file = client.pdf_new(
-        file_path=pdf_file_path,
-        conversion_formats={
-            "docx": True,
-            "pdf": True,
-            "tex.zip": True
-        }
-    )
-    pdf_file.wait_until_complete(ignore_conversions=True)
-    print(pdf_file.pdf_status())
-    print(pdf_file.pdf_conversion_status())
-    pdf_file.download_output_to_local_path(conversion_format='docx',path='output')
+
+    # pdf = client.pdf_new(file_path='tests/files/pdfs/theres-plenty-of-room-at-the-bottom.pdf', file_batch_uuid='helloworld')
+    # pdf.wait_until_complete()
+    # pdf.download_output_to_local_path(conversion_format='lines.json', path='outputs/')
+
+    import os
+
+    file_batch = client.file_batch_new()
+    print(f'file_batch_uuid: {file_batch.file_batch_uuid}')
+    input_folder = "tests/files/pdfs"
+    output_folder = "outputs"
+    os.makedirs(output_folder, exist_ok=True)
+    for filename in os.listdir(input_folder):
+        file_path = os.path.join(input_folder, filename)
+        print(file_path)
+        pdf = client.pdf_new(file_path=file_path, file_batch_uuid=file_batch.file_batch_uuid)
+    file_batch.wait_until_complete(timeout=200)
+    print(file_batch.file_batch_status())
+    # file_batch.wait_until_complete(timeout=500)
+    # response = file_batch.files()
+    # pdfs = response['files']
+    # for pdf in pdfs:
+    #     pdf.download_output_to_local_path(conversion_format='pdf', path=f'{output_folder}/{pdf.pdf_id}.pdf')

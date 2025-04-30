@@ -1,7 +1,10 @@
 import time
 import requests
 import os
-from typing import Optional
+from typing import Optional, List, TypedDict
+
+from sympy.core.numbers import Infinity
+
 from mpxpy.pdf import Pdf
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
@@ -21,12 +24,12 @@ class FileBatch:
         auth: An Auth instance with Mathpix credentials.
         file_batch_id: The unique identifier for this file batch.
     """
-    def __init__(self, auth: Auth , file_batch_id: str = None):
+    def __init__(self, auth: Auth , file_batch_uuid: str = None):
         """Initialize a FileBatch instance.
 
         Args:
             auth: Auth instance containing Mathpix API credentials.
-            file_batch_id: The unique identifier for the file batch.
+            file_batch_uuid: The unique identifier for the file batch.
 
         Raises:
             ValueError: If auth is not provided or file_batch_id is empty.
@@ -35,8 +38,8 @@ class FileBatch:
         if not self.auth:
             logger.error("FileBatch requires an authenticated client")
             raise ValueError("FileBatch requires an authenticated client")
-        self.file_batch_id = file_batch_id or ''
-        if not self.file_batch_id:
+        self.file_batch_uuid = file_batch_uuid or ''
+        if not self.file_batch_uuid:
             logger.error("FileBatch requires a File Batch ID")
             raise ValueError("FileBatch requires a File Batch ID")
 
@@ -47,8 +50,8 @@ class FileBatch:
             bool: True if any files in the batch are still processing, False if all
                  files are either completed or have errored out.
         """
-        logger.info(f"Checking if file batch {self.file_batch_id} is still processing")
-        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id)
+        logger.info(f"Checking if file batch {self.file_batch_uuid} is still processing")
+        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_uuid)
         response = requests.get(endpoint, headers=self.auth.headers)
         response_json = response.json()
         total_files = response_json["total_files"]
@@ -65,12 +68,16 @@ class FileBatch:
             dict: JSON response containing batch status information including counts
                  of total, completed, and error files.
         """
-        logger.info(f"Getting status for file batch {self.file_batch_id}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id)
+        logger.info(f"Getting status for file batch {self.file_batch_uuid}")
+        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_uuid)
         response = requests.get(endpoint, headers=self.auth.headers)
         return response.json()
 
-    def files(self, cursor: Optional[str] = None):
+    def files(self, cursor: Optional[str] = None) -> TypedDict('FileBatchListResponse', {
+        'files': List[Pdf],
+        'cursor': str,
+        'has_more': bool
+    }):
         """Retrieve the files in this batch, with pagination support.
 
         Args:
@@ -82,22 +89,22 @@ class FileBatch:
                 - 'cursor': Pagination cursor for the next page
                 - 'has_more': Boolean indicating if more pages are available
         """
-        logger.info(f"Retrieving files for batch {self.file_batch_id}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id, 'files')
+        logger.info(f"Retrieving files for batch {self.file_batch_uuid}")
+        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_uuid, 'files')
         if cursor:
             endpoint += f"?cursor={cursor}"
         response = requests.get(endpoint, headers=self.auth.headers)
         response_json = response.json()
         files = []
-        for file in response_json['results']:
-            files.append(Pdf(pdf_id=file))
+        for pdf_id in response_json['results']:
+            files.append(Pdf(auth=self.auth, pdf_id=pdf_id))
         return {
             'files': files,
             'cursor': response_json['cursor'],
             'has_more': response_json['has_more']
         }
 
-    def wait_until_complete(self, timeout: int = 60):
+    def wait_until_complete(self, timeout: int = Infinity):
         """Wait for all files in the batch to complete processing.
 
         Polls the batch status until all files are either completed or have errored out,
@@ -112,22 +119,23 @@ class FileBatch:
         """
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValueError("Timeout must be a positive, non-zero integer")
-        logger.info(f"Waiting for file batch {self.file_batch_id} to complete (timeout: {timeout}s)")
+        logger.info(f"Waiting for file batch {self.file_batch_uuid} to complete (timeout: {timeout}s)")
         attempts = 1
         completed = False
         while attempts < timeout:
             file_batch_status = self.file_batch_status()
+            print(file_batch_status)
             total = file_batch_status["total_files"]
             completed_count = file_batch_status["completed_files"]
             error_count = file_batch_status["error_files"]
             if total == completed_count + error_count:
                 completed = True
                 logger.info(
-                    f"File batch {self.file_batch_id} completed: {completed_count} successful, {error_count} errors, {total} total")
+                    f"File batch {self.file_batch_uuid} completed: {completed_count} successful, {error_count} errors, {total} total")
                 break
             logger.info(f"File batch processing... Status: {completed_count}/{total} completed, {error_count} errors")
             time.sleep(1)
             attempts += 1
         if not completed:
-            logger.warning(f"File batch {self.file_batch_id} did not complete within timeout period ({timeout}s)")
+            logger.warning(f"File batch {self.file_batch_uuid} did not complete within timeout period ({timeout}s)")
         return completed

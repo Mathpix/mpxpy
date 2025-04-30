@@ -25,7 +25,6 @@ def test_image_conversion_remote_file(client):
 
 
 def test_image_conversion_local_file(client):
-    """Tests processing a local image file."""
     image_file_path = os.path.join(current_dir, "files/images/code_5.jpg")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     image = client.image_new(
@@ -61,7 +60,7 @@ def test_invalid_image_arguments(client):
     image_file_path = os.path.join(current_dir, "files/images/cases_hw.png")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     with pytest.raises(ValidationError):
-        image = client.image_new(file_path=image_file_path, file_url=image_file_url)
+        client.image_new(file_path=image_file_path, file_url=image_file_url)
 
 
 if __name__ == '__main__':

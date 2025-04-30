@@ -4,7 +4,7 @@ import os
 logger = logging.getLogger("mathpix")
 
 
-def configure_logging(level=None):
+def configure_logging(level=None, enabled=True):
     """Configure logging for the mathpix package.
 
     Args:
