@@ -1,10 +1,8 @@
 import time
-import os
 from typing import Optional, List
-
 import requests
 from pydantic import BaseModel
-
+from urllib.parse import urljoin
 from mpxpy.pdf import Pdf
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
@@ -59,7 +57,7 @@ class FileBatch:
                  files are either completed or have errored out.
         """
         logger.info(f"Checking if file batch {self.file_batch_id} is still processing")
-        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id)
+        endpoint = urljoin(self.auth.api_url, f'v3/file-batches/{self.file_batch_id}')
         response = requests.get(endpoint, headers=self.auth.headers)
         response_json = response.json()
         total_files = response_json["total_files"]
@@ -77,7 +75,7 @@ class FileBatch:
                  of total, completed, and error files.
         """
         logger.info(f"Getting status for file batch {self.file_batch_id}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id)
+        endpoint =  urljoin(self.auth.api_url, f'v3/file-batches/{self.file_batch_id}')
         response = requests.get(endpoint, headers=self.auth.headers)
         return response.json()
 
@@ -94,7 +92,7 @@ class FileBatch:
                 - has_more (bool): Whether more pages of results are available.
         """
         logger.info(f"Retrieving files for batch {self.file_batch_id}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches', self.file_batch_id, 'files')
+        endpoint =  urljoin(self.auth.api_url, f'v3/file-batches/{self.file_batch_id}/files')
         if cursor:
             endpoint += f"?cursor={cursor}"
         response = requests.get(endpoint, headers=self.auth.headers)

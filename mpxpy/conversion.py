@@ -1,6 +1,7 @@
 import os
 import time
 from typing import Optional, Dict
+from urllib.parse import urljoin
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
 from mpxpy.request_handler import get
@@ -82,7 +83,7 @@ class Conversion:
             dict: JSON response containing conversion status information.
         """
         logger.info(f"Getting status for conversion {self.conversion_id}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/converter', self.conversion_id)
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}')
         response = get(endpoint, headers=self.auth.headers)
         return response.json()
 
@@ -100,7 +101,7 @@ class Conversion:
             ConversionIncompleteError: If the specified format's conversion is not complete.
         """
         logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/converter', f'{self.conversion_id}.{conversion_format}')
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
         try:
             data = response.json()
@@ -129,13 +130,13 @@ class Conversion:
             FilesystemError: If output fails to save to the local path
         """
         logger.info(f"Downloading conversion {self.conversion_id} in format {conversion_format} to path {path}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/converter', f'{self.conversion_id}.{conversion_format}')
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         if path != "":
             os.makedirs(path, exist_ok=True)
-        file_path = os.path.join(path, f'{self.conversion_id}.{conversion_format}')
+        file_path = urljoin(path, f'{self.conversion_id}.{conversion_format}')
         try:
             with open(file_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):

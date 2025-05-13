@@ -1,10 +1,8 @@
 import json
-import os
-
 import requests
 from typing import Dict, Any, Optional, List
 from pathlib import Path
-
+from urllib.parse import urljoin
 from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
@@ -117,7 +115,7 @@ class MathpixClient:
         if (file_path is None and file_url is None) or (file_path is not None and file_url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or file_url must be provided")
             raise ValidationError("Exactly one of file_path or file_url must be provided")
-        endpoint = os.path.join(self.auth.api_url, 'v3/pdf')
+        endpoint = urljoin(self.auth.api_url, 'v3/pdf')
         options = {
             "math_inline_delimiters": ["$", "$"],
             "rm_spaces": True
@@ -211,7 +209,7 @@ class MathpixClient:
                 "This feature will be enabled in a future release."
             )
         logger.info("Creating new file batch")
-        endpoint = os.path.join(self.auth.api_url, 'v3/file-batches')
+        endpoint = urljoin(self.auth.api_url, 'v3/file-batches')
         try:
             response = post(endpoint, headers=self.auth.headers)
             response.raise_for_status()
@@ -239,7 +237,7 @@ class MathpixClient:
             MathpixClientError: If the API request fails.
         """
         logger.info(f"Starting new MMD conversions to: {conversion_formats}")
-        endpoint = os.path.join(self.auth.api_url, 'v3/converter')
+        endpoint = urljoin(self.auth.api_url, 'v3/converter')
         options = {
             "mmd": mmd,
             "formats": conversion_formats
