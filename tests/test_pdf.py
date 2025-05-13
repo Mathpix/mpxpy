@@ -1,7 +1,7 @@
 import os
 import shutil
 import pytest
-
+from urllib.parse import urljoin
 from mpxpy.errors import ConversionIncompleteError, ValidationError
 from mpxpy.mathpix_client import MathpixClient
 
@@ -136,16 +136,9 @@ if __name__ == '__main__':
     # test_pdf_convert_local_file(client)
     # test_pdf_download_conversion(client)
     # test_pdf_get_result_bytes(client)
-    pdf_file_path = os.path.join(current_dir, "files/pdfs/theres-plenty-of-room-at-the-bottom.pdf")
-    pdf_file = client.pdf_new(
-        file_path=pdf_file_path,
-        conversion_formats={
-            "docx": True,
-            "pdf": True,
-            "tex.zip": True
-        }
+    image_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
+    image = client.image_new(
+        file_url=image_file_url,
     )
-    pdf_file.wait_until_complete(ignore_conversions=True)
-    print(pdf_file.pdf_status())
-    print(pdf_file.pdf_conversion_status())
-    pdf_file.download_output_to_local_path(conversion_format='docx',path='output')
+    lines_result = image.lines_json()
+    print(lines_result)
