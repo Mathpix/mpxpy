@@ -1,7 +1,7 @@
 import os
 import shutil
 import pytest
-from urllib.parse import urljoin
+
 from mpxpy.errors import ConversionIncompleteError, ValidationError
 from mpxpy.mathpix_client import MathpixClient
 
@@ -136,9 +136,3 @@ if __name__ == '__main__':
     # test_pdf_convert_local_file(client)
     # test_pdf_download_conversion(client)
     # test_pdf_get_result_bytes(client)
-    image_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
-    image = client.image_new(
-        file_url=image_file_url,
-    )
-    lines_result = image.lines_json()
-    print(lines_result)

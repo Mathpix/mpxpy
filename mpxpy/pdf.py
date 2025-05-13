@@ -148,7 +148,7 @@ class Pdf:
             dict: JSON response containing conversion status information.
         """
         logger.info(f"Getting conversion status for PDF {self.pdf_id}")
-        endpoint = urljoin(self.auth.api_url, f'v3/converter{self.pdf_id}')
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.pdf_id}')
         response = get(endpoint, headers=self.auth.headers)
         return response.json()
 
@@ -166,7 +166,7 @@ class Pdf:
             ConversionIncompleteError: If the conversion is not complete
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
-        endpoint = urljoin(self.auth.api_url, f'v3/pdf{self.pdf_id}.{conversion_format}')
+        endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
@@ -187,7 +187,7 @@ class Pdf:
             FilesystemError: If output fails to save to the local path
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
-        endpoint = urljoin(self.auth.api_url, f'v3/pdf{self.pdf_id}.{conversion_format}')
+        endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
