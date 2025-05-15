@@ -83,8 +83,8 @@ pdf_file = client.pdf_new(
 pdf_file.wait_until_complete(timeout=60)
 
 # Download the converted files
-pdf_file.download_output_to_local_path("docx", "./output")
-pdf_file.download_output_to_local_path("md", "./output")
+docx_output_path = pdf_file.download_output_to_local_path(conversion_format="docx", output_folder="./output", output_name='cd229-notes1.docx')
+md_output_path = pdf_file.download_output_to_local_path(conversion_format="md", output_folder="./output", output_name='cd229-notes1.docx')
 ```
 
 ### Process an Image
@@ -129,7 +129,7 @@ conversion = client.conversion_new(
 conversion.wait_until_complete(timeout=30)
 
 # Download the converted output
-docx_output = conversion.download_output("docx")
+output_path = conversion.download_output_to_local_path(conversion_format="docx", output_folder="./output", output_name='math-conversion.docx')
 ```
 
 ## Error Handling

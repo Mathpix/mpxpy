@@ -172,12 +172,13 @@ class Pdf:
             raise ConversionIncompleteError("Conversion not complete")
         return response.content
 
-    def download_output_to_local_path(self, conversion_format: Optional[str] = 'pdf', path: Optional[str] = ""):
+    def download_output_to_local_path(self, conversion_format: Optional[str] = 'pdf', output_folder: Optional[str] = "", output_name: Optional[str] = ""):
         """Download the processed PDF (or optional conversion) result and save it to a local path.
 
         Args:
             conversion_format: Output format extension (e.g., 'docx', 'md', 'tex').
-            path: Directory path where the file should be saved. Will be created if it doesn't exist.
+            output_folder: Directory path where the file should be saved. Will be created if it doesn't exist.
+            output_name: File name for the output. Default is {pdf_id}.{conversion_format}
 
         Returns:
             str: The path to the saved file.
@@ -186,14 +187,18 @@ class Pdf:
             ConversionIncompleteError: If the conversion is not complete
             FilesystemError: If output fails to save to the local path
         """
-        logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
+        if output_name == "":
+            output_name = f'{self.pdf_id}.{conversion_format}'
+        if output_folder != "" and output_folder[-1] != '/':
+            output_folder += '/'
+        logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {output_folder}{output_name}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
-        if path != "":
-            os.makedirs(path, exist_ok=True)
-        file_path = urljoin(path, f'{self.pdf_id}.{conversion_format}')
+        if output_folder != "":
+            os.makedirs(output_folder, exist_ok=True)
+        file_path = urljoin(output_folder, output_name)
         try:
             with open(file_path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
