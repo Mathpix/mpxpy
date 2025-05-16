@@ -180,7 +180,7 @@ class Conversion:
             raise ConversionIncompleteError("Conversion not complete")
         return response.content
 
-    def save_docx_file(self, path: str) -> str:
+    def to_docx_file(self, path: str) -> str:
         """Save the processed conversion result to a DOCX file at a local path.
 
         Args:
@@ -194,7 +194,7 @@ class Conversion:
         """
         return self.save_file(path=path, conversion_format='docx')
 
-    def docx(self) -> bytes:
+    def to_docx_bytes(self) -> bytes:
         """Get the processed conversion result as DOCX bytes.
 
         Returns:
@@ -205,7 +205,7 @@ class Conversion:
         """
         return self.bytes_result(conversion_format='docx')
 
-    def save_md_file(self, path: str) -> str:
+    def to_md_file(self, path: str) -> str:
         """Save the processed conversion result to a Markdown file at a local path.
 
         Args:
@@ -219,7 +219,7 @@ class Conversion:
         """
         return self.save_file(path=path, conversion_format='md')
 
-    def md(self) -> str:
+    def to_md_text(self) -> str:
         """Get the processed conversion result as a Markdown string.
 
         Returns:
@@ -230,7 +230,7 @@ class Conversion:
         """
         return self.text_result(conversion_format='md')
 
-    def save_mmd_file(self, path: str) -> str:
+    def to_mmd_file(self, path: str) -> str:
         """Save the processed conversion result to a Mathpix Markdown file at a local path.
 
         Args:
@@ -244,7 +244,7 @@ class Conversion:
         """
         return self.save_file(path=path, conversion_format='mmd')
 
-    def mmd(self) -> str:
+    def to_mmd_text(self) -> str:
         """Get the processed conversion result as a Mathpix Markdown string.
 
         Returns:
@@ -255,7 +255,7 @@ class Conversion:
         """
         return self.text_result(conversion_format='mmd')
 
-    def save_tex_zip(self, path: str) -> str:
+    def to_tex_zip_file(self, path: str) -> str:
         """Save the processed conversion result to a tex.zip file at a local path.
 
         Args:
@@ -269,7 +269,7 @@ class Conversion:
         """
         return self.save_file(path=path, conversion_format='tex.zip')
 
-    def tex_zip(self) -> bytes:
+    def to_tex_zip_bytes(self) -> bytes:
         """Get the processed conversion result in tex.zip format as bytes.
 
         Returns:
@@ -280,7 +280,7 @@ class Conversion:
         """
         return self.bytes_result(conversion_format='tex.zip')
 
-    def save_html(self, path: str) -> str:
+    def to_html_file(self, path: str) -> str:
         """Save the processed conversion result to a HTML file at a local path.
 
         Args:
@@ -294,7 +294,7 @@ class Conversion:
         """
         return self.save_file(path=path, conversion_format='html')
 
-    def html(self) -> bytes:
+    def to_html_bytes(self) -> bytes:
         """Get the processed conversion result in HTML format as bytes.
 
         Returns:
@@ -305,7 +305,7 @@ class Conversion:
         """
         return self.bytes_result(conversion_format='html')
 
-    def save_pdf(self, path: str) -> str:
+    def to_pdf_file(self, path: str) -> str:
         """Save the processed conversion result to a PDF file at a local path.
 
         Args:
@@ -319,7 +319,7 @@ class Conversion:
         """
         return self.save_file(path=path, conversion_format='pdf')
 
-    def pdf(self) -> bytes:
+    def to_pdf_bytes(self) -> bytes:
         """Get the processed conversion result in PDF format as bytes.
 
         Returns:
@@ -330,7 +330,7 @@ class Conversion:
         """
         return self.bytes_result(conversion_format='pdf')
 
-    def save_latex_pdf(self, path: str) -> str:
+    def to_latex_pdf_file(self, path: str) -> str:
         """Save the processed conversion result to a PDF file containing LaTeX at a local path.
 
         Args:
@@ -344,7 +344,7 @@ class Conversion:
         """
         return self.save_file(path=path, conversion_format='latex.pdf')
 
-    def latex_pdf(self) -> bytes:
+    def to_latex_pdf_bytes(self) -> bytes:
         """Get the processed conversion result in PDF format as bytes (with LaTeX).
 
         Returns:

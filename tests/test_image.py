@@ -51,7 +51,7 @@ def test_conversion_from_image_output(client):
     output_file = 'cases_hw.docx'
     output_path = os.path.join(output_dir, output_file)
     os.mkdir(output_dir)
-    file_path_obj = conversion.save_docx_file(path=output_path)
+    file_path_obj = conversion.to_docx_file(path=output_path)
     file_path_str = str(file_path_obj)
     assert os.path.exists(file_path_str), f"Downloaded file does not exist at {file_path_str}"
     assert os.path.getsize(file_path_str) > 0, f"Downloaded file {file_path_str} is empty"
@@ -63,7 +63,7 @@ def test_invalid_image_arguments(client):
     image_file_path = os.path.join(current_dir, "files/images/cases_hw.png")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     with pytest.raises(ValidationError):
-        image = client.image_new(file_path=image_file_path, url=image_file_url)
+        client.image_new(file_path=image_file_path, url=image_file_url)
 
 
 if __name__ == '__main__':

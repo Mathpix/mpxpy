@@ -260,7 +260,7 @@ class Pdf:
             raise ConversionIncompleteError("Conversion not complete")
         return response.content
 
-    def save_docx_file(self, path: str) -> str:
+    def to_docx_file(self, path: str) -> str:
         """Save the processed PDF result to a DOCX file at a local path.
 
         Args:
@@ -274,7 +274,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='docx')
 
-    def docx(self) -> bytes:
+    def to_docx_bytes(self) -> bytes:
         """Get the processed PDF result as DOCX bytes.
 
         Returns:
@@ -285,7 +285,7 @@ class Pdf:
         """
         return self.bytes_result(conversion_format='docx')
 
-    def save_md_file(self, path: str) -> str:
+    def to_md_file(self, path: str) -> str:
         """Save the processed PDF result to a Markdown file at a local path.
 
         Args:
@@ -299,7 +299,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='md')
 
-    def md(self) -> str:
+    def to_md_text(self) -> str:
         """Get the processed PDF result as a Markdown string.
 
         Returns:
@@ -310,7 +310,7 @@ class Pdf:
         """
         return self.text_result(conversion_format='md')
 
-    def save_mmd_file(self, path: str) -> str:
+    def to_mmd_file(self, path: str) -> str:
         """Save the processed PDF result to a Mathpix Markdown file at a local path.
 
         Args:
@@ -324,7 +324,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='mmd')
 
-    def mmd(self) -> str:
+    def to_mmd_text(self) -> str:
         """Get the processed PDF result as a Mathpix Markdown string.
 
         Returns:
@@ -335,7 +335,7 @@ class Pdf:
         """
         return self.text_result(conversion_format='mmd')
 
-    def save_tex_zip(self, path: str) -> str:
+    def to_tex_zip_file(self, path: str) -> str:
         """Save the processed PDF result to a tex.zip file at a local path.
 
         Args:
@@ -349,7 +349,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='tex.zip')
 
-    def tex_zip(self) -> bytes:
+    def to_tex_zip_bytes(self) -> bytes:
         """Get the processed PDF result in tex.zip format as bytes.
 
         Returns:
@@ -360,7 +360,7 @@ class Pdf:
         """
         return self.bytes_result(conversion_format='tex.zip')
 
-    def save_html(self, path: str) -> str:
+    def to_html_file(self, path: str) -> str:
         """Save the processed PDF result to a HTML file at a local path.
 
         Args:
@@ -374,7 +374,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='html')
 
-    def html(self) -> bytes:
+    def to_html_bytes(self) -> bytes:
         """Get the processed PDF result in HTML format as bytes.
 
         Returns:
@@ -385,7 +385,7 @@ class Pdf:
         """
         return self.bytes_result(conversion_format='html')
 
-    def save_pdf(self, path: str) -> str:
+    def to_pdf_file(self, path: str) -> str:
         """Save the processed PDF result to a PDF file at a local path.
 
         Args:
@@ -399,7 +399,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='pdf')
 
-    def pdf(self) -> bytes:
+    def to_pdf_bytes(self) -> bytes:
         """Get the processed PDF result in PDF format as bytes.
 
         Returns:
@@ -410,7 +410,7 @@ class Pdf:
         """
         return self.bytes_result(conversion_format='pdf')
 
-    def save_lines_json(self, path: str) -> str:
+    def to_lines_json_file(self, path: str) -> str:
         """Save the processed PDF line-by-line result to a JSON file at a local path.
 
         Args:
@@ -424,7 +424,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='lines.json')
 
-    def lines_json(self) -> Dict:
+    def to_lines_json(self) -> Dict:
         """Get the processed PDF result in JSON format.
 
         Returns:
@@ -435,7 +435,7 @@ class Pdf:
         """
         return self.json_result(conversion_format='lines.json')
 
-    def save_lines_mmd_json(self, path: str) -> str:
+    def to_lines_mmd_json_file(self, path: str) -> str:
         """Save the processed PDF line-by-line result, including Mathpix Markdown, to a JSON file at a local path.
 
         Args:
@@ -449,7 +449,7 @@ class Pdf:
         """
         return self.save_file(path=path, conversion_format='lines.mmd.json')
 
-    def lines_mmd_json(self) -> Dict:
+    def to_lines_mmd_json(self) -> Dict:
         """Get the processed PDF result in JSON format with text in Mathpix Markdown.
 
         Returns:

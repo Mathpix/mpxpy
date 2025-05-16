@@ -35,7 +35,7 @@ def test_conversion_get_result_docx(client):
     conversion = client.conversion_new(mmd=mmd, convert_to_docx=True)
     assert conversion.conversion_id is not None
     conversion.wait_until_complete(timeout=10)
-    docx_bytes = conversion.docx()
+    docx_bytes = conversion.to_docx_bytes()
     assert docx_bytes is not None
     assert len(docx_bytes) > 0
     assert docx_bytes.startswith(b'PK') # Test whether it matches the DOCX file signature
@@ -51,7 +51,7 @@ def test_conversion_save_docx_to_local_path(client):
     output_path = os.path.join(output_dir, output_name)
     try:
         conversion.wait_until_complete(timeout=10)
-        path = conversion.save_docx_file(path=output_path)
+        path = conversion.to_docx_file(path=output_path)
         assert os.path.exists(path)
         assert os.path.getsize(path) > 0
     finally:
@@ -72,7 +72,7 @@ def test_conversion_incomplete_conversion(client):
     '''
     conversion = client.conversion_new(mmd=mmd, convert_to_docx=True)
     with pytest.raises(ConversionIncompleteError):
-        conversion.docx()
+        conversion.to_docx_bytes()
 
 if __name__ == '__main__':
     client = MathpixClient()

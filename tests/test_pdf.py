@@ -63,7 +63,7 @@ def test_pdf_save_md_to_local_path(client):
     output_dir = 'output'
     output_name = 'the-internet-tidal-wave.md'
     output_path = os.path.join(output_dir, output_name)
-    file_path = pdf.save_md_file(path=output_path)
+    file_path = pdf.to_md_file(path=output_path)
     try:
         assert os.path.exists(file_path)
         assert os.path.getsize(file_path) > 0
@@ -81,7 +81,7 @@ def test_pdf_get_result_md_text(client):
     )
     assert pdf.pdf_id is not None
     assert pdf.wait_until_complete(timeout=60)
-    md_output = pdf.md()
+    md_output = pdf.to_md_text()
     assert md_output is not None
     assert isinstance(md_output, str), f"Expected md output to be a string, got {type(md_output)}"
 
@@ -93,7 +93,7 @@ def test_pdf_get_result_lines_json(client):
     )
     assert pdf.pdf_id is not None
     assert pdf.wait_until_complete(timeout=60)
-    lines_json = pdf.lines_json()
+    lines_json = pdf.to_lines_json()
     assert lines_json is not None
     assert isinstance(lines_json, Dict), f"Expected lines.json output to be a dict, got {type(lines_json)}"
 
@@ -106,7 +106,7 @@ def test_pdf_get_result_docx(client):
     )
     assert pdf.pdf_id is not None
     assert pdf.wait_until_complete(timeout=60)
-    docx_bytes = pdf.docx()
+    docx_bytes = pdf.to_docx_bytes()
     assert docx_bytes is not None
     assert isinstance(docx_bytes, bytes), f"Expected docx output to be of type bytes, got {type(docx_bytes)}"
 
@@ -118,7 +118,7 @@ def test_pdf_download_output_incomplete_conversion(client):
         convert_to_md=True
     )
     with pytest.raises(ConversionIncompleteError):
-        pdf.md()
+        pdf.to_md_text()
 
 def test_invalid_pdf_arguments(client):
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
