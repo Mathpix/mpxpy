@@ -114,5 +114,4 @@ class Image:
         """
         logger.info("Getting Mathpix Markdown (MMD) representation")
         result = self.results()
-        logger.info(result)
         return result['text']

@@ -2,6 +2,8 @@
 
 The official Python client for the Mathpix API. Process PDFs and images, and convert math/text content with the Mathpix API.
 
+# Setup
+
 ## Installation
 
 ```bash
@@ -10,7 +12,7 @@ pip install mpxpy
 
 ## Authentication
 
-You'll need a Mathpix API app_id and app_key to use this client. You can get these from the [Mathpix Console](https://console.mathpix.com/).
+You'll need a Mathpix API app_id and app_key to use this client. You can get these from [Mathpix Console](https://console.mathpix.com/).
 
 Set your credentials by either:
 
@@ -24,6 +26,8 @@ MathpixClient will prioritize auth configs in the following order:
 3. ENV vars located in `.env`
 4. ENV vars located in `local.env`
 
+## Initialization
+
 ### Using environment variables
 
 Create a config file at `~/.mpx/config` or add ENV variables to `.env` or `local.env` files:
@@ -32,19 +36,6 @@ Create a config file at `~/.mpx/config` or add ENV variables to `.env` or `local
 MATHPIX_APP_ID=your-app-id
 MATHPIX_APP_KEY=your-app-key
 MATHPIX_URL=https://api.mathpix.com  # optional, defaults to this value
-```
-
-# Initialization
-
-### Passing credentials directly
-
-```python
-from mpxpy.mathpix_client import MathpixClient
-
-client = MathpixClient(
-    app_id="your-app-id",
-    app_key="your-app-key"
-)
 ```
 
 Then initialize the client:
@@ -56,13 +47,17 @@ from mpxpy.mathpix_client import MathpixClient
 client = MathpixClient()
 ```
 
+### Using arguments
+
+You can also pass in your App ID and App Key when initializing the client:
+
 ```python
 from mpxpy.mathpix_client import MathpixClient
 
-# Will use passed arguments
 client = MathpixClient(
     app_id="your-app-id",
     app_key="your-app-key"
+    # Optional "api_url" argument sets the base URL. This can be useful for development with on-premise deployments
 )
 ```
 
@@ -78,7 +73,7 @@ client = MathpixClient(
     app_key="your-app-key"
 )
 
-# Process a PDF file
+# Process a PDF file with multiple conversion formats and options
 pdf = client.pdf_new(
     url="http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf",
     convert_to_docx=True,
@@ -187,7 +182,7 @@ client = MathpixClient(
     app_key="your-app-key"
 )
 
-# Convert Mathpix Markdown to various formats
+# Similar to Pdf, Conversion class takes separate arguments for each conversion format
 conversion = client.conversion_new(
     mmd="\\frac{1}{2}",
     convert_to_docx=True,
