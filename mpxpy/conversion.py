@@ -121,6 +121,9 @@ class Conversion:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
+        if path.endswith('/') or path.endswith('\\'):
+            filename = f"{self.conversion_id}.{conversion_format}"
+            path = os.path.join(path, filename)
         logger.info(f"Downloading output for Conversion {self.conversion_id} in format {conversion_format} to path {path}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)

@@ -182,6 +182,9 @@ class Pdf:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
+        if path.endswith('/') or path.endswith('\\'):
+            filename = f"{self.pdf_id}.{conversion_format}"
+            path = os.path.join(path, filename)
         logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)

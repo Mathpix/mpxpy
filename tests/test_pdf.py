@@ -135,10 +135,3 @@ def test_bad_pdf_path(client):
 
 if __name__ == '__main__':
     client = MathpixClient()
-    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
-    pdf = client.pdf_new(
-        file_path=pdf_file_path
-    )
-    completed = pdf.wait_until_complete(timeout=60)
-    output_path = 'output/lines.json'
-    file_path = pdf.save_lines_json(path=output_path)

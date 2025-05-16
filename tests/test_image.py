@@ -29,7 +29,7 @@ def test_image_conversion_local_file(client):
     image_file_path = os.path.join(current_dir, "files/images/code_5.jpg")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     image = client.image_new(
-        url=image_file_path
+        file_path=image_file_path
     )
     mmd_result = image.mmd()
     assert mmd_result is not None
@@ -40,16 +40,18 @@ def test_conversion_from_image_output(client):
     image_file_path = os.path.join(current_dir, "files/images/cases_hw.png")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     image = client.image_new(
-        url=image_file_path
+        file_path=image_file_path
     )
     mmd = image.mmd()
     assert mmd is not None and len(mmd) > 0
-    conversion = client.conversion_new(mmd=mmd, conversion_formats={"docx": True})
+    conversion = client.conversion_new(mmd=mmd, convert_to_docx=True)
     completed = conversion.wait_until_complete(timeout=20)
     assert completed, "Conversion from MMD did not complete"
     output_dir = "output"
+    output_file = 'cases_hw.docx'
+    output_path = os.path.join(output_dir, output_file)
     os.mkdir(output_dir)
-    file_path_obj = conversion.download_output_to_local_path("docx", output_dir)
+    file_path_obj = conversion.save_docx_file(path=output_path)
     file_path_str = str(file_path_obj)
     assert os.path.exists(file_path_str), f"Downloaded file does not exist at {file_path_str}"
     assert os.path.getsize(file_path_str) > 0, f"Downloaded file {file_path_str} is empty"
@@ -61,11 +63,8 @@ def test_invalid_image_arguments(client):
     image_file_path = os.path.join(current_dir, "files/images/cases_hw.png")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     with pytest.raises(ValidationError):
-        image = client.image_new(file_path=image_file_path, file_url=image_file_url)
+        image = client.image_new(file_path=image_file_path, url=image_file_url)
 
 
 if __name__ == '__main__':
     client = MathpixClient()
-    # test_image_conversion_remote_file(client)
-    # test_image_conversion_local_file(client)
-    # test_conversion_from_image_output(client)
