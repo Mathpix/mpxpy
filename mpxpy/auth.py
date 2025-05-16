@@ -67,10 +67,12 @@ class Auth:
         Returns:
             bool: True if any config file was successfully loaded, False otherwise
         """
+        base_dir = os.path.dirname(os.path.abspath(__file__))  # Gets the directory of the current file (auth.py)
+        root_dir = os.path.dirname(base_dir)
         config_locations = [
             pathlib.Path.home() / ".mpx" / "config",  # ~/.mpx/config
-            pathlib.Path(".env"),
-            pathlib.Path("local.env"),
+            pathlib.Path(root_dir) / ".env",
+            pathlib.Path(root_dir) / "local.env",
         ]
         for config_path in config_locations:
             if config_path.exists():

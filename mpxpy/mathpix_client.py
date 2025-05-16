@@ -38,7 +38,7 @@ class MathpixClient:
     def image_new(
             self,
             file_path: Optional[str] = None,
-            file_url: Optional[str] = None,
+            url: Optional[str] = None,
     ):
         """Create a new Mathpix Image resource.
 
@@ -46,34 +46,39 @@ class MathpixClient:
 
         Args:
             file_path: Path to a local image file.
-            file_url: URL of a remote image.
+            url: URL of a remote image.
 
         Returns:
             Image: A new Image instance.
 
         Raises:
-            ValueError: If exactly one of file_path and file_url are not provided.
+            ValueError: If exactly one of file_path and url are not provided.
         """
-        if (file_path is None and file_url is None) or (file_path is not None and file_url is not None):
-            logger.error("Invalid parameters: Exactly one of file_path or file_url must be provided")
-            raise ValidationError("Exactly one of file_path or file_url must be provided")
+        if (file_path is None and url is None) or (file_path is not None and url is not None):
+            logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
+            raise ValidationError("Exactly one of file_path or url must be provided")
         if file_path:
             logger.info(f"Creating new Image: path={file_path}")
             return Image(auth=self.auth, file_path=file_path)
         else:
-            logger.info(f"Creating new Image: url={file_url}")
-            return Image(auth=self.auth, file_url=file_url)
+            logger.info(f"Creating new Image: url={url}")
+            return Image(auth=self.auth, url=url)
 
     def pdf_new(
             self,
             file_path: Optional[str] = None,
-            file_url: Optional[str] = None,
+            url: Optional[str] = None,
+            convert_to_docx: Optional[bool] = False,
+            convert_to_md: Optional[bool] = False,
+            convert_to_mmd: Optional[bool] = False,
+            convert_to_tex_zip: Optional[bool] = False,
+            convert_to_html: Optional[bool] = False,
+            convert_to_pdf: Optional[bool] = False,
             file_batch_id: Optional[str] = None,
             webhook_url: Optional[str] = None,
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
-            conversion_formats: Optional[Dict[str, bool]] = None
     ) -> Pdf:
         """Send a file to Mathpix for processing.
 
@@ -81,19 +86,24 @@ class MathpixClient:
 
         Args:
             file_path: Path to a local PDF file.
-            file_url: URL of a remote PDF file.
+            url: URL of a remote PDF file.
+            convert_to_docx: Optional boolean to automatically convert your result to docx
+            convert_to_md: Optional boolean to automatically convert your result to md
+            convert_to_mmd: Optional boolean to automatically convert your result to mmd
+            convert_to_tex_zip: Optional boolean to automatically convert your result to tex.zip
+            convert_to_html: Optional boolean to automatically convert your result to html
+            convert_to_pdf: Optional boolean to automatically convert your result to pdf
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
             webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
             webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
             webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
-            conversion_formats: Optional dict of formats to convert to (e.g. {"docx": True}).
 
         Returns:
             Pdf: A new Pdf instance
 
         Raises:
-            ValueError: If neither file_path nor file_url, or both file_path and file_url are provided.
+            ValueError: If neither file_path nor url, or both file_path and url are provided.
             FileNotFoundError: If the specified file_path does not exist.
             MathpixClientError: If the API request fails.
             NotImplementedError: If the API URL is set to the production API and webhook or file_batch_id parameters are provided.
@@ -112,13 +122,14 @@ class MathpixClient:
                     "File batches are not yet available in the production API. "
                     "This feature will be enabled in a future release."
                 )
-        if (file_path is None and file_url is None) or (file_path is not None and file_url is not None):
-            logger.error("Invalid parameters: Exactly one of file_path or file_url must be provided")
-            raise ValidationError("Exactly one of file_path or file_url must be provided")
+        if (file_path is None and url is None) or (file_path is not None and url is not None):
+            logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
+            raise ValidationError("Exactly one of file_path or url must be provided")
         endpoint = urljoin(self.auth.api_url, 'v3/pdf')
         options = {
             "math_inline_delimiters": ["$", "$"],
-            "rm_spaces": True
+            "rm_spaces": True,
+            "conversion_formats": {}
         }
         if file_batch_id:
             options["file_batch_id"] = file_batch_id
@@ -130,8 +141,18 @@ class MathpixClient:
             options["webhook_payload"] = webhook_payload
         if webhook_enabled_events:
             options["webhook_enabled_events"] = webhook_enabled_events
-        if conversion_formats:
-            options["conversion_formats"] = conversion_formats
+        if convert_to_docx:
+            options["conversion_formats"]['docx'] = True
+        if convert_to_md:
+            options["conversion_formats"]['md'] = True
+        if convert_to_mmd:
+            options["conversion_formats"]['mmd'] = True
+        if convert_to_tex_zip:
+            options["conversion_formats"]['tex.zip'] = True
+        if convert_to_html:
+            options["conversion_formats"]['html'] = True
+        if convert_to_pdf:
+            options["conversion_formats"]['pdf'] = True
         data = {
             "options_json": json.dumps(options)
         }
@@ -153,19 +174,24 @@ class MathpixClient:
                         auth=self.auth,
                         pdf_id=pdf_id,
                         file_path=file_path,
+                        convert_to_docx=convert_to_docx,
+                        convert_to_md=convert_to_md,
+                        convert_to_mmd=convert_to_mmd,
+                        convert_to_tex_zip=convert_to_tex_zip,
+                        convert_to_html=convert_to_html,
+                        convert_to_pdf=convert_to_pdf,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
                         mathpix_webhook_secret=mathpix_webhook_secret,
                         webhook_payload=webhook_payload,
                         webhook_enabled_events=webhook_enabled_events,
-                        conversion_formats=conversion_formats
                     )
                 except requests.exceptions.RequestException as e:
                     logger.error(f"PDF upload failed: {e}")
                     raise MathpixClientError(f"Mathpix PDF request failed: {e}")
         else:
-            logger.info(f"Creating new PDF: url={file_url}")
-            options["url"] = file_url
+            logger.info(f"Creating new PDF: url={url}")
+            options["url"] = url
             try:
                 response = post(endpoint, json=options, headers=self.auth.headers)
                 response.raise_for_status()
@@ -176,13 +202,18 @@ class MathpixClient:
                 return Pdf(
                         auth=self.auth,
                         pdf_id=pdf_id,
-                        file_url=file_url,
+                        url=url,
+                        convert_to_docx=convert_to_docx,
+                        convert_to_md=convert_to_md,
+                        convert_to_mmd=convert_to_mmd,
+                        convert_to_tex_zip=convert_to_tex_zip,
+                        convert_to_html=convert_to_html,
+                        convert_to_pdf=convert_to_pdf,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
                         mathpix_webhook_secret=mathpix_webhook_secret,
                         webhook_payload=webhook_payload,
                         webhook_enabled_events=webhook_enabled_events,
-                        conversion_formats=conversion_formats
                     )
             except requests.exceptions.RequestException as e:
                 logger.error(f"URL processing failed: {e}")
@@ -221,14 +252,28 @@ class MathpixClient:
             logger.error(f"File batch creation failed: {e}")
             raise MathpixClientError(f"Mathpix request failed: {e}")
 
-    def conversion_new(self, mmd: str, conversion_formats: Dict[str, bool]):
+    def conversion_new(
+            self,
+            mmd: str,
+            convert_to_docx: Optional[bool] = False,
+            convert_to_md: Optional[bool] = False,
+            convert_to_tex_zip: Optional[bool] = False,
+            convert_to_html: Optional[bool] = False,
+            convert_to_pdf: Optional[bool] = False,
+            convert_to_latex_pdf: Optional[bool] = False,
+    ):
         """Create a new conversion from Mathpix Markdown.
 
         Converts Mathpix Markdown (MMD) to various output formats.
 
         Args:
             mmd: Mathpix Markdown content to convert.
-            conversion_formats: Dictionary specifying output formats and their options.
+            convert_to_docx: Optional boolean to convert your result to docx
+            convert_to_md: Optional boolean to convert your result to md
+            convert_to_tex_zip: Optional boolean to convert your result to tex.zip
+            convert_to_html: Optional boolean to convert your result to html
+            convert_to_pdf: Optional boolean to convert your result to pdf
+            convert_to_latex_pdf: Optional boolean to convert your result to pdf containing LaTeX
 
         Returns:
             Conversion: A new Conversion instance.
@@ -236,12 +281,26 @@ class MathpixClient:
         Raises:
             MathpixClientError: If the API request fails.
         """
-        logger.info(f"Starting new MMD conversions to: {conversion_formats}")
+        logger.info(f"Starting new MMD conversions to")
         endpoint = urljoin(self.auth.api_url, 'v3/converter')
         options = {
             "mmd": mmd,
-            "formats": conversion_formats
+            "formats": {}
         }
+        if convert_to_docx:
+            options["formats"]['docx'] = True
+        if convert_to_md:
+            options["formats"]['md'] = True
+        if convert_to_tex_zip:
+            options["formats"]['tex.zip'] = True
+        if convert_to_html:
+            options["formats"]['html'] = True
+        if convert_to_pdf:
+            options["formats"]['pdf'] = True
+        if convert_to_latex_pdf:
+            options["formats"]['latex.pdf'] = True
+        if len(options['formats'].items()) == 0:
+            raise ValidationError("At least one format is required.")
         try:
             response = post(endpoint, json=options, headers=self.auth.headers)
             response.raise_for_status()
@@ -251,7 +310,16 @@ class MathpixClient:
                 raise MathpixClientError(f"Conversion failed: {response_json}")
             conversion_id = response_json['conversion_id']
             logger.info(f"Conversion created, ID: {conversion_id}")
-            return Conversion(auth=self.auth, conversion_id=conversion_id, conversion_formats=conversion_formats)
+            return Conversion(
+                auth=self.auth,
+                conversion_id=conversion_id,
+                convert_to_docx=convert_to_docx,
+                convert_to_md=convert_to_md,
+                convert_to_tex_zip=convert_to_tex_zip,
+                convert_to_html=convert_to_html,
+                convert_to_pdf=convert_to_pdf,
+                convert_to_latex_pdf=convert_to_latex_pdf
+            )
         except requests.exceptions.RequestException as e:
             logger.error(f"Conversion request failed: {e}")
             raise MathpixClientError(f"Conversion request failed: {e}")
