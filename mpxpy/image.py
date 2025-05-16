@@ -1,6 +1,5 @@
 import json
 from pathlib import Path
-import os
 import requests
 from typing import Optional
 from urllib.parse import urljoin
@@ -17,31 +16,31 @@ class Image:
     Attributes:
         auth: An Auth instance with Mathpix credentials.
         file_path: Path to a local image file, if using a local file.
-        file_url: URL of a remote image, if using a remote file.
+        url: URL of a remote image, if using a remote file.
     """
-    def __init__(self, auth: Auth, file_path: Optional[str] = None, file_url: Optional[str] = None):
+    def __init__(self, auth: Auth, file_path: Optional[str] = None, url: Optional[str] = None):
         """Initialize an Image instance.
 
         Args:
             auth: Auth instance containing Mathpix API credentials.
             file_path: Path to a local image file.
-            file_url: URL of a remote image.
+            url: URL of a remote image.
 
         Raises:
             AuthenticationError: If auth is not provided
-            ValidationError: If neither file_path nor file_url is provided,
-                        or if both file_path and file_url are provided.
+            ValidationError: If neither file_path nor url is provided,
+                        or if both file_path and url are provided.
         """
         self.auth = auth
         if not self.auth:
             logger.error("Image requires an authenticated client")
             raise AuthenticationError("Image requires an authenticated client")
         self.file_path = file_path or ''
-        self.file_url = file_url or ''
-        if not self.file_path and not self.file_url:
+        self.url = url or ''
+        if not self.file_path and not self.url:
             logger.error("Image requires a file path or file URL")
             raise ValidationError("Image requires a file path or file URL")
-        if self.file_path and self.file_url:
+        if self.file_path and self.url:
             logger.error("Exactly one of file path or file URL must be provider")
             raise ValidationError("Exactly one of file path or file URL must be provider")
 
@@ -63,7 +62,7 @@ class Image:
             FileNotFoundError: If the file_path does not point to an existing file.
             ValueError: If the API request fails.
         """
-        logger.info(f"Processing image: path={self.file_path}, url={self.file_url}, include_line_data={include_line_data}")
+        logger.info(f"Processing image: path={self.file_path}, url={self.url}, include_line_data={include_line_data}")
         endpoint = urljoin(self.auth.api_url, 'v3/text')
         options = {
             "include_line_data": include_line_data
@@ -87,7 +86,7 @@ class Image:
                     logger.error(f"Mathpix image request failed: {e}")
                     raise ValueError(f"Mathpix image request failed: {e}")
         else:
-            options["src"] = self.file_url
+            options["src"] = self.url
             try:
                 response = requests.post(endpoint, json=options, headers=self.auth.headers)
                 response.raise_for_status()

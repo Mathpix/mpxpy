@@ -50,6 +50,10 @@ from mpxpy.mathpix_client import MathpixClient
 
 # Will use ~/.mpx/config or environment variables
 client = MathpixClient()
+```
+
+```python
+from mpxpy.mathpix_client import MathpixClient
 
 # Will use passed arguments
 client = MathpixClient(
@@ -71,20 +75,25 @@ client = MathpixClient(
 )
 
 # Process a PDF file
-pdf_file = client.pdf_new(
-    file_url="http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf",
-    conversion_formats={
-        "docx": True,
-        "md": True
-    }
+pdf = client.pdf_new(
+    url="http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf",
+    convert_to_docx=True,
+    convert_to_md=True,
 )
 
-# Wait for processing to complete
-pdf_file.wait_until_complete(timeout=60)
+# Wait for processing to complete. Optional timeout argument is 60 seconds by default.
+pdf.wait_until_complete(timeout=30)
 
-# Download the converted files
-docx_output_path = pdf_file.download_output_to_local_path(conversion_format="docx", output_folder="./output", output_name='cd229-notes1.docx')
-md_output_path = pdf_file.download_output_to_local_path(conversion_format="md", output_folder="./output", output_name='cd229-notes1.docx')
+# Get the Markdown outputs
+md_output_path = pdf.save_md_file(path='output/sample.md')
+md_text = pdf.md() # is type str
+print(md_text)
+# Get the DOCX outputs
+docx_output_path = pdf.save_docx_file(path='output/sample.docx')
+docx_bytes = pdf.docx() # is type bytes
+# Get the JSON outputs
+lines_json_output_path = pdf.save_lines_json(path='output/sample.lines.json')
+lines_json = pdf.lines_json() # is type Dict
 ```
 
 ### Process an Image
@@ -98,7 +107,7 @@ client = MathpixClient(
 )
 # Process an image file
 image = client.image_new(
-    file_url="https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
+    url="https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
 )
 
 # Get the Mathpix Markdown (MMD) representation
@@ -119,17 +128,23 @@ client = MathpixClient(
     app_id="your-app-id",
     app_key="your-app-key"
 )
+
 # Convert Mathpix Markdown to various formats
 conversion = client.conversion_new(
     mmd="\\frac{1}{2}",
-    conversion_formats={"docx": True}
+    convert_to_docx=True,
+    convert_to_md=True,
 )
 
 # Wait for conversion to complete
 conversion.wait_until_complete(timeout=30)
 
-# Download the converted output
-output_path = conversion.download_output_to_local_path(conversion_format="docx", output_folder="./output", output_name='math-conversion.docx')
+# Get the Markdown outputs
+md_output_path = conversion.save_md_file(path='output/sample.md')
+md_text = conversion.md() # is of type str
+# Get the DOCX outputs
+docx_output_path = conversion.save_docx_file(path='output/sample.docx')
+docx_bytes = conversion.docx() # is of type bytes
 ```
 
 ## Error Handling
@@ -148,13 +163,13 @@ from mpxpy.errors import MathpixClientError, ConversionIncompleteError
 client = MathpixClient(app_id="your-app-id", app_key="your-app-key")
 
 try:
-    pdf = client.pdf_new(file_path="example.pdf", conversion_formats={'docx': True})
+    pdf = client.pdf_new(file_path="example.pdf", convert_to_docx=True)
 except FileNotFoundError as e:
     print(f"File not found: {e}")
 except MathpixClientError as e:
     print(f"File upload error: {e}")
 try:
-    pdf.download_output_to_local_path('docx', 'output/path')
+    pdf.save_docx_file('output/path/example.pdf')
 except ConversionIncompleteError as e:
     print(f'Conversions are not complete')
 ```

@@ -15,7 +15,7 @@ def client():
 def test_image_conversion_remote_file(client):
     image_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
     image = client.image_new(
-        file_url=image_file_url,
+        url=image_file_url,
     )
     lines_result = image.lines_json()
     assert lines_result is not None
@@ -29,7 +29,7 @@ def test_image_conversion_local_file(client):
     image_file_path = os.path.join(current_dir, "files/images/code_5.jpg")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     image = client.image_new(
-        file_path=image_file_path
+        url=image_file_path
     )
     mmd_result = image.mmd()
     assert mmd_result is not None
@@ -40,7 +40,7 @@ def test_conversion_from_image_output(client):
     image_file_path = os.path.join(current_dir, "files/images/cases_hw.png")
     assert os.path.exists(image_file_path), f"Test input file not found: {image_file_path}"
     image = client.image_new(
-        file_path=image_file_path
+        url=image_file_path
     )
     mmd = image.mmd()
     assert mmd is not None and len(mmd) > 0

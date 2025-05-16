@@ -1,3 +1,4 @@
+import json
 import os
 import time
 from typing import Optional, Dict
@@ -17,9 +18,24 @@ class Conversion:
     Attributes:
         auth: An Auth instance with Mathpix credentials.
         conversion_id: The unique identifier for this conversion.
-        conversion_formats: Dictionary specifying output formats and their options.
+        convert_to_docx: Optional boolean to automatically convert your result to docx
+        convert_to_md: Optional boolean to automatically convert your result to md
+        convert_to_tex_zip: Optional boolean to automatically convert your result to tex.zip
+        convert_to_html: Optional boolean to automatically convert your result to html
+        convert_to_pdf: Optional boolean to automatically convert your result to pdf
+        convert_to_latex_pdf: Optional boolean to automatically convert your result to pdf containing LaTeX
     """
-    def __init__(self, auth: Auth , conversion_id: str = None, conversion_formats: Dict[str, bool] = None):
+    def __init__(
+            self,
+            auth: Auth ,
+            conversion_id: str = None,
+            convert_to_docx: Optional[bool] = False,
+            convert_to_md: Optional[bool] = False,
+            convert_to_tex_zip: Optional[bool] = False,
+            convert_to_html: Optional[bool] = False,
+            convert_to_pdf: Optional[bool] = False,
+            convert_to_latex_pdf: Optional[bool] = False
+    ):
         """Initialize a Conversion instance.
 
         Args:
@@ -37,7 +53,12 @@ class Conversion:
         if not self.conversion_id:
             logger.error("Conversion requires a Conversion ID")
             raise ValidationError("Conversion requires a Conversion ID")
-        self.conversion_formats = conversion_formats
+        self.convert_to_docx = convert_to_docx
+        self.convert_to_md = convert_to_md
+        self.convert_to_tex_zip = convert_to_tex_zip
+        self.convert_to_html = convert_to_html
+        self.convert_to_pdf = convert_to_pdf
+        self.convert_to_latex_pdf = convert_to_latex_pdf
 
     def wait_until_complete(self, timeout: int=60):
         """Wait for the conversion to complete.
@@ -87,67 +108,246 @@ class Conversion:
         response = get(endpoint, headers=self.auth.headers)
         return response.json()
 
-    def download_output(self, conversion_format: Optional[str]="pdf"):
-        """Download the conversion result.
+    def save_file(self, path: str, conversion_format: str) -> str:
+        """Helper function to save the processed conversion result to a local path.
 
         Args:
-            conversion_format: Optional output format extension (e.g., 'docx', 'pdf', 'tex').
-                   If not provided, returns the default conversion result.
+            path: The local file path where the output will be saved
+            conversion_format: The format in which the output will be saved
 
         Returns:
-            bytes: The binary content of the conversion result.
-
-        Raises:
-            ConversionIncompleteError: If the specified format's conversion is not complete.
-        """
-        logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
-        endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
-        try:
-            data = response.json()
-        except ValueError:
-            return response.content
-        if 'conversion_status' in data and conversion_format in data['conversion_status']:
-            status = data['conversion_status'][conversion_format].get('status')
-            if status != 'completed':
-                raise ConversionIncompleteError(
-                    f"Conversion to {conversion_format} is not complete (status: {status})"
-                )
-        return response.content
-
-    def download_output_to_local_path(self, conversion_format: Optional[str] = "pdf", output_folder: Optional[str] = "", output_name: Optional[str] = ""):
-        """Download the conversion result and save it to a local file.
-
-        Args:
-            conversion_format: Output format extension (e.g., 'docx', 'pdf', 'latex.pdf').
-            output_folder: Directory path where the file should be saved. Will be created if it doesn't exist.
-            output_name: File name for the output. Default is {conversion_id}.{conversion_format}
-
-        Returns:
-            str: The path to the saved file.
+            output_path: The path of the saved Markdown file
 
         Raises:
             ConversionIncompleteError: If the conversion is not complete
-            FilesystemError: If output fails to save to the local path
         """
-        if output_name == "":
-            output_name = f'{self.conversion_id}.{conversion_format}'
-        if output_folder != "" and output_folder[-1] != '/':
-            output_folder += '/'
-        logger.info(f"Downloading conversion {self.conversion_id} in format {conversion_format} to path {output_folder}{output_name}")
+        logger.info(f"Downloading output for Conversion {self.conversion_id} in format {conversion_format} to path {path}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
-        if output_folder != "":
-            os.makedirs(output_folder, exist_ok=True)
-        file_path = urljoin(output_folder, output_name)
         try:
-            with open(file_path, 'wb') as f:
+            directory = os.path.dirname(path)
+            if directory:
+                os.makedirs(directory, exist_ok=True)
+            with open(path, 'wb') as f:
                 for chunk in response.iter_content(chunk_size=8192):
                     if chunk:
                         f.write(chunk)
         except Exception:
             raise FilesystemError('Failed to save file to system')
-        logger.info(f"File saved successfully to {file_path}")
-        return file_path
+        logger.info(f"File saved successfully to {path}")
+        return path
+
+    def text_result(self, conversion_format: str) -> str:
+        """Helper method to download the processed conversion result as text.
+
+        Args:
+            conversion_format: Output format extension
+
+        Returns:
+            text: The result as a string (md, mmd)
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
+        response = get(endpoint, headers=self.auth.headers)
+        if response.status_code == 404:
+            raise ConversionIncompleteError("Conversion not complete")
+        return response.text
+
+    def bytes_result(self, conversion_format: str) -> bytes:
+        """Helper method to download the processed conversion result bytes.
+
+        Args:
+            conversion_format: Output format extension
+
+        Returns:
+            bytes: The binary content of the result (docx, html, tex.zip, pdf, latex.pdf)
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
+        response = get(endpoint, headers=self.auth.headers)
+        if response.status_code == 404:
+            raise ConversionIncompleteError("Conversion not complete")
+        return response.content
+
+    def save_docx_file(self, path: str) -> str:
+        """Save the processed conversion result to a DOCX file at a local path.
+
+        Args:
+            path: The local file path where the DOCX output will be saved
+
+        Returns:
+            output_path: The path of the saved DOCX file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='docx')
+
+    def docx(self) -> bytes:
+        """Get the processed conversion result as DOCX bytes.
+
+        Returns:
+            bytes: The binary content of the DOCX result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='docx')
+
+    def save_md_file(self, path: str) -> str:
+        """Save the processed conversion result to a Markdown file at a local path.
+
+        Args:
+            path: The local file path where the Markdown output will be saved
+
+        Returns:
+            output_path: The path of the saved Markdown file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='md')
+
+    def md(self) -> str:
+        """Get the processed conversion result as a Markdown string.
+
+        Returns:
+            text: The text content of the Markdown result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.text_result(conversion_format='md')
+
+    def save_mmd_file(self, path: str) -> str:
+        """Save the processed conversion result to a Mathpix Markdown file at a local path.
+
+        Args:
+            path: The local file path where the Mathpix Markdown output will be saved
+
+        Returns:
+            output_path: The path of the saved Mathpix Markdown file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='mmd')
+
+    def mmd(self) -> str:
+        """Get the processed conversion result as a Mathpix Markdown string.
+
+        Returns:
+            text: The text content of the Mathpix Markdown result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.text_result(conversion_format='mmd')
+
+    def save_tex_zip(self, path: str) -> str:
+        """Save the processed conversion result to a tex.zip file at a local path.
+
+        Args:
+            path: The local file path where the tex.zip output will be saved
+
+        Returns:
+            output_path: The path of the saved tex.zip file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='tex.zip')
+
+    def tex_zip(self) -> bytes:
+        """Get the processed conversion result in tex.zip format as bytes.
+
+        Returns:
+            bytes: The binary content of the tex.zip result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='tex.zip')
+
+    def save_html(self, path: str) -> str:
+        """Save the processed conversion result to a HTML file at a local path.
+
+        Args:
+            path: The local file path where the HTML output will be saved
+
+        Returns:
+            output_path: The path of the saved HTML file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='html')
+
+    def html(self) -> bytes:
+        """Get the processed conversion result in HTML format as bytes.
+
+        Returns:
+            bytes: The binary content of the HTML result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='html')
+
+    def save_pdf(self, path: str) -> str:
+        """Save the processed conversion result to a PDF file at a local path.
+
+        Args:
+            path: The local file path where the PDF output will be saved
+
+        Returns:
+            output_path: The path of the saved PDF file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='pdf')
+
+    def pdf(self) -> bytes:
+        """Get the processed conversion result in PDF format as bytes.
+
+        Returns:
+            bytes: The binary content of the PDF result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='pdf')
+
+    def save_latex_pdf(self, path: str) -> str:
+        """Save the processed conversion result to a PDF file containing LaTeX at a local path.
+
+        Args:
+            path: The local file path where the PDF output will be saved
+
+        Returns:
+            output_path: The path of the saved PDF file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='latex.pdf')
+
+    def latex_pdf(self) -> bytes:
+        """Get the processed conversion result in PDF format as bytes (with LaTeX).
+
+        Returns:
+            bytes: The binary content of the PDF result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='latex.pdf')
