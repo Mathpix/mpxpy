@@ -1,7 +1,6 @@
-import json
 import os
 import time
-from typing import Optional, Dict
+from typing import Optional
 from urllib.parse import urljoin
 from mpxpy.auth import Auth
 from mpxpy.logger import logger

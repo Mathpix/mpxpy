@@ -2,7 +2,7 @@ import os
 import pytest
 import shutil
 from mpxpy.mathpix_client import MathpixClient
-from mpxpy.errors import MathpixClientError, ValidationError, ConversionIncompleteError
+from mpxpy.errors import ValidationError, ConversionIncompleteError
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 
