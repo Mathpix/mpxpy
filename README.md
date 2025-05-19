@@ -271,6 +271,8 @@ cd mpxpy
 
 # Install in development mode
 pip install -e .
+# Or install using the requirements.txt file
+pip install -r requirements.txt
 ```
 
 ## Running Tests
@@ -278,7 +280,8 @@ pip install -e .
 ```bash
 # Install test dependencies
 pip install -e ".[dev]"
-
+# Or install using the requirements.txt file
+pip install -r requirements.txt
 # Run tests
 pytest
 ```
