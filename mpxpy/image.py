@@ -6,6 +6,7 @@ from urllib.parse import urljoin
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
 from mpxpy.errors import AuthenticationError, ValidationError
+from mpxpy.request_handler import post
 
 
 class Image:
@@ -78,7 +79,7 @@ class Image:
             with path.open("rb") as pdf_file:
                 files = {"file": pdf_file}
                 try:
-                    response = requests.post(endpoint, data=data, files=files, headers=self.auth.headers)
+                    response = post(endpoint, data=data, files=files, headers=self.auth.headers)
                     response.raise_for_status()
                     logger.info("OCR processing successful")
                     return response.json()
@@ -88,7 +89,7 @@ class Image:
         else:
             options["src"] = self.url
             try:
-                response = requests.post(endpoint, json=options, headers=self.auth.headers)
+                response = post(endpoint, json=options, headers=self.auth.headers)
                 response.raise_for_status()
                 logger.info("OCR processing successful")
                 return response.json()
