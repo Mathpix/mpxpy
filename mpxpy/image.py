@@ -18,14 +18,16 @@ class Image:
         auth: An Auth instance with Mathpix credentials.
         file_path: Path to a local image file, if using a local file.
         url: URL of a remote image, if using a remote file.
+        improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
     """
-    def __init__(self, auth: Auth, file_path: Optional[str] = None, url: Optional[str] = None):
+    def __init__(self, auth: Auth, file_path: Optional[str] = None, url: Optional[str] = None, improve_mathpix: bool = True):
         """Initialize an Image instance.
 
         Args:
             auth: Auth instance containing Mathpix API credentials.
             file_path: Path to a local image file.
             url: URL of a remote image.
+            improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
 
         Raises:
             AuthenticationError: If auth is not provided
@@ -44,6 +46,7 @@ class Image:
         if self.file_path and self.url:
             logger.error("Exactly one of file path or file URL must be provider")
             raise ValidationError("Exactly one of file path or file URL must be provider")
+        self.improve_mathpix = improve_mathpix
 
     def results(
             self,
@@ -66,7 +69,8 @@ class Image:
         logger.info(f"Processing image: path={self.file_path}, url={self.url}, include_line_data={include_line_data}")
         endpoint = urljoin(self.auth.api_url, 'v3/text')
         options = {
-            "include_line_data": include_line_data
+            "include_line_data": include_line_data,
+            "improve_mathpix": self.improve_mathpix
         }
         data = {
             "options_json": json.dumps(options)

@@ -26,6 +26,7 @@ class Pdf:
         convert_to_tex_zip: Optional boolean to automatically convert your result to tex.zip
         convert_to_html: Optional boolean to automatically convert your result to html
         convert_to_pdf: Optional boolean to automatically convert your result to pdf
+        improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
         file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
         webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
         mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
@@ -44,6 +45,7 @@ class Pdf:
             convert_to_tex_zip: Optional[bool] = False,
             convert_to_html: Optional[bool] = False,
             convert_to_pdf: Optional[bool] = False,
+            improve_mathpix: Optional[bool] = False,
             file_batch_id: Optional[str] = None,
             webhook_url: Optional[str] = None,
             mathpix_webhook_secret: Optional[str] = None,
@@ -55,6 +57,20 @@ class Pdf:
         Args:
             auth: Auth instance containing Mathpix API credentials.
             pdf_id: The unique identifier for the PDF.
+            file_path: Path to a local PDF file.
+            url: URL of a remote PDF file.
+            convert_to_docx: Optional boolean to automatically convert your result to docx
+            convert_to_md: Optional boolean to automatically convert your result to md
+            convert_to_mmd: Optional boolean to automatically convert your result to mmd
+            convert_to_tex_zip: Optional boolean to automatically convert your result to tex.zip
+            convert_to_html: Optional boolean to automatically convert your result to html
+            convert_to_pdf: Optional boolean to automatically convert your result to pdf
+            improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
+            file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
+            webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
+            mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
+            webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
+            webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
 
         Raises:
             ValueError: If auth is not provided or pdf_id is empty.
@@ -75,6 +91,7 @@ class Pdf:
         self.convert_to_tex_zip=convert_to_tex_zip
         self.convert_to_html=convert_to_html
         self.convert_to_pdf=convert_to_pdf
+        self.improve_mathpix=improve_mathpix
         self.file_batch_id = file_batch_id
         self.webhook_url = webhook_url
         self.mathpix_webhook_secret = mathpix_webhook_secret

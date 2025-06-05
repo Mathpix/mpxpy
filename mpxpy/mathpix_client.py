@@ -22,31 +22,32 @@ class MathpixClient:
     Attributes:
         auth: An Auth instance managing API credentials and endpoints.
     """
-    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None):
+    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None, improve_mathpix: bool = True):
         """Initialize a new Mathpix client.
 
         Args:
             app_id: Optional Mathpix application ID. If None, will use environment variable.
             app_key: Optional Mathpix application key. If None, will use environment variable.
-            api_url: Optional Mathpix API URL. If None, will use environment variable
-                or default to the production API.
+            api_url: Optional Mathpix API URL. If None, will use environment variable or default to the production API.
+            improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true.
         """
         logger.info("Initializing MathpixClient")
         self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url)
+        self.improve_mathpix = improve_mathpix
         logger.info(f"MathpixClient initialized with API URL: {self.auth.api_url}")
 
     def image_new(
             self,
             file_path: Optional[str] = None,
             url: Optional[str] = None,
+            improve_mathpix: Optional[bool] = True,
     ):
-        """Create a new Mathpix Image resource.
-
-        Processes an image either from a local file or remote URL.
+        """Process an image either from a local file or remote URL.
 
         Args:
             file_path: Path to a local image file.
             url: URL of a remote image.
+            improve_mathpix: Optional boolean to enable Mathpix to retain user output.
 
         Returns:
             Image: A new Image instance.
@@ -57,12 +58,17 @@ class MathpixClient:
         if (file_path is None and url is None) or (file_path is not None and url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
+        if not self.improve_mathpix:
+            logger.info('improve_mathpix set to False on the client')
+            improve_mathpix = False
+        elif not improve_mathpix:
+            improve_mathpix = False
         if file_path:
             logger.info(f"Creating new Image: path={file_path}")
-            return Image(auth=self.auth, file_path=file_path)
+            return Image(auth=self.auth, file_path=file_path, improve_mathpix=improve_mathpix)
         else:
             logger.info(f"Creating new Image: url={url}")
-            return Image(auth=self.auth, url=url)
+            return Image(auth=self.auth, url=url, improve_mathpix=improve_mathpix)
 
     def pdf_new(
             self,
@@ -74,15 +80,14 @@ class MathpixClient:
             convert_to_tex_zip: Optional[bool] = False,
             convert_to_html: Optional[bool] = False,
             convert_to_pdf: Optional[bool] = False,
+            improve_mathpix: Optional[bool] = True,
             file_batch_id: Optional[str] = None,
             webhook_url: Optional[str] = None,
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
     ) -> Pdf:
-        """Send a file to Mathpix for processing.
-
-        Uploads a PDF from a local file or remote URL and optionally requests conversions.
+        """Uploads a PDF, document, or ebook from a local file or remote URL and optionally requests conversions.
 
         Args:
             file_path: Path to a local PDF file.
@@ -93,6 +98,7 @@ class MathpixClient:
             convert_to_tex_zip: Optional boolean to automatically convert your result to tex.zip
             convert_to_html: Optional boolean to automatically convert your result to html
             convert_to_pdf: Optional boolean to automatically convert your result to pdf
+            improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
             webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
@@ -125,11 +131,17 @@ class MathpixClient:
         if (file_path is None and url is None) or (file_path is not None and url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
+        if not self.improve_mathpix:
+            logger.info('improve_mathpix set to False on the client')
+            improve_mathpix = False
+        elif not improve_mathpix:
+            improve_mathpix = False
         endpoint = urljoin(self.auth.api_url, 'v3/pdf')
         options = {
             "math_inline_delimiters": ["$", "$"],
             "rm_spaces": True,
-            "conversion_formats": {}
+            "conversion_formats": {},
+            "improve_mathpix": improve_mathpix,
         }
         if file_batch_id:
             options["file_batch_id"] = file_batch_id
@@ -180,6 +192,7 @@ class MathpixClient:
                         convert_to_tex_zip=convert_to_tex_zip,
                         convert_to_html=convert_to_html,
                         convert_to_pdf=convert_to_pdf,
+                        improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
                         mathpix_webhook_secret=mathpix_webhook_secret,
@@ -209,6 +222,7 @@ class MathpixClient:
                         convert_to_tex_zip=convert_to_tex_zip,
                         convert_to_html=convert_to_html,
                         convert_to_pdf=convert_to_pdf,
+                        improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
                         mathpix_webhook_secret=mathpix_webhook_secret,
@@ -220,9 +234,7 @@ class MathpixClient:
                 raise MathpixClientError(f"Mathpix PDF request failed: {e}")
 
     def file_batch_new(self):
-        """Create a new file batch.
-
-        Creates a new batch ID that can be used to group multiple file uploads.
+        """Creates a new file batch ID that can be used to group multiple file uploads.
 
         Note: This feature is not yet available in the production API.
 
@@ -262,9 +274,7 @@ class MathpixClient:
             convert_to_pdf: Optional[bool] = False,
             convert_to_latex_pdf: Optional[bool] = False,
     ):
-        """Create a new conversion from Mathpix Markdown.
-
-        Converts Mathpix Markdown (MMD) to various output formats.
+        """Converts Mathpix Markdown (MMD) to various output formats.
 
         Args:
             mmd: Mathpix Markdown content to convert.
