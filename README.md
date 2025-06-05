@@ -61,6 +61,18 @@ client = MathpixClient(
 )
 ```
 
+### Improve Mathpix
+
+You can optionally set `improve_mathpix` to False to prevent Mathpix from retaining any outputs from a client. This can also be set on a per-request-basis, but if a client has `improve_mathpix` disabled, all requests made using that client will also be disabled.
+
+```python
+from mpxpy.mathpix_client import MathpixClient
+
+client = MathpixClient(
+    improve_mathpix=False
+)
+```
+
 # Process PDFs
 
 ## Basic Usage
@@ -78,6 +90,7 @@ pdf = client.pdf_new(
     url="http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf",
     convert_to_docx=True,
     convert_to_md=True,
+    # Optional pdf-level improve_mathpix argument is default True
 )
 
 # Wait for processing to complete. Optional timeout argument is 60 seconds by default.
@@ -146,6 +159,7 @@ client = MathpixClient(
 # Process an image file
 image = client.image_new(
     url="https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
+    # Optional image-level improve_mathpix argument is default True
 )
 
 # Get the Mathpix Markdown (MMD) representation
