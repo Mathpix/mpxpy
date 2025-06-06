@@ -41,6 +41,7 @@ class MathpixClient:
             file_path: Optional[str] = None,
             url: Optional[str] = None,
             improve_mathpix: Optional[bool] = True,
+            include_images_as_base64: Optional[bool] = False,
     ):
         """Process an image either from a local file or remote URL.
 
@@ -65,10 +66,10 @@ class MathpixClient:
             improve_mathpix = False
         if file_path:
             logger.info(f"Creating new Image: path={file_path}")
-            return Image(auth=self.auth, file_path=file_path, improve_mathpix=improve_mathpix)
+            return Image(auth=self.auth, file_path=file_path, improve_mathpix=improve_mathpix, include_images_as_base64=include_images_as_base64)
         else:
             logger.info(f"Creating new Image: url={url}")
-            return Image(auth=self.auth, url=url, improve_mathpix=improve_mathpix)
+            return Image(auth=self.auth, url=url, improve_mathpix=improve_mathpix, include_images_as_base64=include_images_as_base64)
 
     def pdf_new(
             self,
@@ -86,6 +87,7 @@ class MathpixClient:
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
+            include_images_as_base64: Optional[bool] = False,
     ) -> Pdf:
         """Uploads a PDF, document, or ebook from a local file or remote URL and optionally requests conversions.
 
@@ -104,6 +106,7 @@ class MathpixClient:
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
             webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
             webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+            include_images_as_base64: Optional boolean to include images base64 encoded inline
 
         Returns:
             Pdf: A new Pdf instance
@@ -165,6 +168,8 @@ class MathpixClient:
             options["conversion_formats"]['html'] = True
         if convert_to_pdf:
             options["conversion_formats"]['pdf'] = True
+        if include_images_as_base64:
+            options["include_images_as_base64"] = True
         data = {
             "options_json": json.dumps(options)
         }
@@ -198,6 +203,7 @@ class MathpixClient:
                         mathpix_webhook_secret=mathpix_webhook_secret,
                         webhook_payload=webhook_payload,
                         webhook_enabled_events=webhook_enabled_events,
+                        include_images_as_base64=include_images_as_base64,
                     )
                 except requests.exceptions.RequestException as e:
                     logger.error(f"PDF upload failed: {e}")
@@ -228,6 +234,7 @@ class MathpixClient:
                         mathpix_webhook_secret=mathpix_webhook_secret,
                         webhook_payload=webhook_payload,
                         webhook_enabled_events=webhook_enabled_events,
+                        include_images_as_base64=include_images_as_base64,
                     )
             except requests.exceptions.RequestException as e:
                 logger.error(f"URL processing failed: {e}")

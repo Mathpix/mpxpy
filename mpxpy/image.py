@@ -19,8 +19,16 @@ class Image:
         file_path: Path to a local image file, if using a local file.
         url: URL of a remote image, if using a remote file.
         improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
+        include_images_as_base64: Optional boolean to include images base64 encoded inline
     """
-    def __init__(self, auth: Auth, file_path: Optional[str] = None, url: Optional[str] = None, improve_mathpix: bool = True):
+    def __init__(
+            self,
+            auth: Auth,
+            file_path: Optional[str] = None,
+            url: Optional[str] = None,
+            improve_mathpix: bool = True,
+            include_images_as_base64: Optional[bool] = False
+    ):
         """Initialize an Image instance.
 
         Args:
@@ -47,6 +55,7 @@ class Image:
             logger.error("Exactly one of file path or file URL must be provider")
             raise ValidationError("Exactly one of file path or file URL must be provider")
         self.improve_mathpix = improve_mathpix
+        self.include_images_as_base64 = include_images_as_base64
 
     def results(
             self,
@@ -70,7 +79,8 @@ class Image:
         endpoint = urljoin(self.auth.api_url, 'v3/text')
         options = {
             "include_line_data": include_line_data,
-            "improve_mathpix": self.improve_mathpix
+            "improve_mathpix": self.improve_mathpix,
+            "include_images_as_base64": self.include_images_as_base64,
         }
         data = {
             "options_json": json.dumps(options)

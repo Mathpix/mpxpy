@@ -32,6 +32,7 @@ class Pdf:
         mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
         webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
         webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+        include_images_as_base64: Optional boolean to include images base64 encoded inline
     """
     def __init__(
             self,
@@ -51,6 +52,7 @@ class Pdf:
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
+            include_images_as_base64: Optional[bool] = False,
     ):
         """Initialize a PDF instance.
 
@@ -71,6 +73,7 @@ class Pdf:
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
             webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
             webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+            include_images_as_base64: Optional boolean to include images base64 encoded inline
 
         Raises:
             ValueError: If auth is not provided or pdf_id is empty.
@@ -97,6 +100,7 @@ class Pdf:
         self.mathpix_webhook_secret = mathpix_webhook_secret
         self.webhook_payload = webhook_payload
         self.webhook_enabled_events = webhook_enabled_events
+        self.include_images_as_base64 = include_images_as_base64
 
     def wait_until_complete(self, timeout: int=60, ignore_conversions: bool=False):
         """Wait for the PDF processing and optional conversions to complete.

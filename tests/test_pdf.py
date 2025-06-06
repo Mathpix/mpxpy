@@ -85,6 +85,21 @@ def test_pdf_get_result_md_text(client):
     assert md_output is not None
     assert isinstance(md_output, str), f"Expected md output to be a string, got {type(md_output)}"
 
+def test_pdf_get_result_md_text_base64_images(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/theres-plenty-of-room-at-the-bottom.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_md=True,
+        include_images_as_base64=True,
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    md_output = pdf.to_md_text()
+    assert md_output is not None
+    assert isinstance(md_output, str), f"Expected md output to be a string, got {type(md_output)}"
+    assert "data:image/jpeg;base64" in md_output, "Couldn't find base64 encoded image in md output"
+
 def test_pdf_get_result_lines_json(client):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
@@ -110,6 +125,20 @@ def test_pdf_get_result_docx(client):
     assert docx_bytes is not None
     assert isinstance(docx_bytes, bytes), f"Expected docx output to be of type bytes, got {type(docx_bytes)}"
 
+def test_pdf_get_result_html_multiple_base64_images(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/circuit.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_docx=True,
+        include_images_as_base64=True,
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    html_bytes = pdf.to_html_bytes()
+    assert html_bytes is not None
+    assert isinstance(html_bytes, bytes), f"Expected docx output to be of type bytes, got {type(html_bytes)}"
+    assert html_bytes.count(b"data:image/jpeg;base64") == 3, "Couldn't find 3 base64 encoded image in html output"
 
 def test_pdf_download_output_incomplete_conversion(client):
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"

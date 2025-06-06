@@ -291,11 +291,17 @@ pip install -r requirements.txt
 
 ## Running Tests
 
+You'll need to install [`git-lfs`](https://git-lfs.com/) to download the test images and PDFs.
+
 ```bash
 # Install test dependencies
 pip install -e ".[dev]"
 # Or install using the requirements.txt file
 pip install -r requirements.txt
+# Initialize git LFS in the repository
+git lfs install
+# Download the image and PDF files
+git lfs pull
 # Run tests
 pytest
 ```
