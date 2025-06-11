@@ -70,7 +70,9 @@ class Image:
         endpoint = urljoin(self.auth.api_url, 'v3/text')
         options = {
             "include_line_data": include_line_data,
-            "improve_mathpix": self.improve_mathpix
+            "metadata":{
+                "improve_mathpix": self.improve_mathpix
+            }
         }
         data = {
             "options_json": json.dumps(options)
