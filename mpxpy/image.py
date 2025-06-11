@@ -70,7 +70,9 @@ class Image:
         endpoint = urljoin(self.auth.api_url, 'v3/text')
         options = {
             "include_line_data": include_line_data,
-            "improve_mathpix": self.improve_mathpix
+            "metadata":{
+                "improve_mathpix": self.improve_mathpix
+            }
         }
         data = {
             "options_json": json.dumps(options)
@@ -109,7 +111,9 @@ class Image:
         """
         logger.info("Getting line-by-line OCR data")
         result = self.results(include_line_data=True)
-        return result['line_data']
+        if 'line_data' in result:
+            return result['line_data']
+        return result
 
     def mmd(self):
         """Get the Mathpix Markdown (MMD) representation of the image.
@@ -119,4 +123,6 @@ class Image:
         """
         logger.info("Getting Mathpix Markdown (MMD) representation")
         result = self.results()
-        return result['text']
+        if 'text' in result:
+            return result['text']
+        return result
