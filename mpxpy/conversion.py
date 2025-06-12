@@ -375,6 +375,12 @@ class Conversion:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
+        if self.auth.api_url == 'https://api.mathpix.com':
+            logger.warning("md.zip feature not available in production API")
+            raise NotImplementedError(
+                "md.zip feature is not yet available in the production API. "
+                "This feature will be enabled in a future release."
+            )
         return self.save_file(path=path, conversion_format='md.zip')
 
     def to_md_zip_bytes(self) -> bytes:
@@ -386,6 +392,12 @@ class Conversion:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
+        if self.auth.api_url == 'https://api.mathpix.com':
+            logger.warning("md.zip feature not available in production API")
+            raise NotImplementedError(
+                "md.zip feature is not yet available in the production API. "
+                "This feature will be enabled in a future release."
+            )
         return self.bytes_result(conversion_format='md.zip')
 
     def to_mmd_zip_file(self, path: str) -> str:
@@ -400,6 +412,12 @@ class Conversion:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
+        if self.auth.api_url == 'https://api.mathpix.com':
+            logger.warning("mmd.zip feature not available in production API")
+            raise NotImplementedError(
+                "mmd.zip feature is not yet available in the production API. "
+                "This feature will be enabled in a future release."
+            )
         return self.save_file(path=path, conversion_format='mmd.zip')
 
     def to_mmd_zip_bytes(self) -> bytes:
@@ -411,6 +429,12 @@ class Conversion:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
+        if self.auth.api_url == 'https://api.mathpix.com':
+            logger.warning("mmd.zip feature not available in production API")
+            raise NotImplementedError(
+                "mmd.zip feature is not yet available in the production API. "
+                "This feature will be enabled in a future release."
+            )
         return self.bytes_result(conversion_format='mmd.zip')
 
     def to_pptx_file(self, path: str) -> str:

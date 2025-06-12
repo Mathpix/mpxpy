@@ -173,12 +173,18 @@ class MathpixClient:
             options["conversion_formats"]['html'] = True
         if convert_to_pdf:
             options["conversion_formats"]['pdf'] = True
+        if convert_to_pptx:
+            options["conversion_formats"]['pptx'] = True
+        if (convert_to_mmd_zip or convert_to_md_zip) and self.auth.api_url == 'https://api.mathpix.com':
+            logger.warning("md.zip and mmd.zip features not available in production API")
+            raise NotImplementedError(
+                "md.zip and mmd.zip features are not yet available in the production API. "
+                "This feature will be enabled in a future release."
+            )
         if convert_to_md_zip:
             options["conversion_formats"]['md.zip'] = True
         if convert_to_mmd_zip:
             options["conversion_formats"]['mmd.zip'] = True
-        if convert_to_pptx:
-            options["conversion_formats"]['pptx'] = True
         data = {
             "options_json": json.dumps(options)
         }
@@ -335,12 +341,18 @@ class MathpixClient:
             options["formats"]['pdf'] = True
         if convert_to_latex_pdf:
             options["formats"]['latex.pdf'] = True
+        if convert_to_pptx:
+            options["formats"]['pptx'] = True
+        if (convert_to_mmd_zip or convert_to_md_zip) and self.auth.api_url == 'https://api.mathpix.com':
+            logger.warning("md.zip and mmd.zip features not available in production API")
+            raise NotImplementedError(
+                "md.zip and mmd.zip features are not yet available in the production API. "
+                "This feature will be enabled in a future release."
+            )
         if convert_to_md_zip:
             options["formats"]['md.zip'] = True
         if convert_to_mmd_zip:
             options["formats"]['mmd.zip'] = True
-        if convert_to_pptx:
-            options["formats"]['pptx'] = True
         if len(options['formats'].items()) == 0:
             raise ValidationError("At least one format is required.")
         try:
