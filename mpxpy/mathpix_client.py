@@ -80,6 +80,9 @@ class MathpixClient:
             convert_to_tex_zip: Optional[bool] = False,
             convert_to_html: Optional[bool] = False,
             convert_to_pdf: Optional[bool] = False,
+            convert_to_md_zip: Optional[bool] = False,
+            convert_to_mmd_zip: Optional[bool] = False,
+            convert_to_pptx: Optional[bool] = False,
             improve_mathpix: Optional[bool] = True,
             file_batch_id: Optional[str] = None,
             webhook_url: Optional[str] = None,
@@ -98,6 +101,9 @@ class MathpixClient:
             convert_to_tex_zip: Optional boolean to automatically convert your result to tex.zip
             convert_to_html: Optional boolean to automatically convert your result to html
             convert_to_pdf: Optional boolean to automatically convert your result to pdf
+            convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
+            convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
+            convert_to_pptx: Optional boolean to automatically convert your result to pptx
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
             webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
@@ -167,6 +173,12 @@ class MathpixClient:
             options["conversion_formats"]['html'] = True
         if convert_to_pdf:
             options["conversion_formats"]['pdf'] = True
+        if convert_to_md_zip:
+            options["conversion_formats"]['md.zip'] = True
+        if convert_to_mmd_zip:
+            options["conversion_formats"]['mmd.zip'] = True
+        if convert_to_pptx:
+            options["conversion_formats"]['pptx'] = True
         data = {
             "options_json": json.dumps(options)
         }
@@ -194,6 +206,9 @@ class MathpixClient:
                         convert_to_tex_zip=convert_to_tex_zip,
                         convert_to_html=convert_to_html,
                         convert_to_pdf=convert_to_pdf,
+                        convert_to_md_zip=convert_to_md_zip,
+                        convert_to_mmd_zip=convert_to_mmd_zip,
+                        convert_to_pptx=convert_to_pptx,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
@@ -224,6 +239,9 @@ class MathpixClient:
                         convert_to_tex_zip=convert_to_tex_zip,
                         convert_to_html=convert_to_html,
                         convert_to_pdf=convert_to_pdf,
+                        convert_to_md_zip=convert_to_md_zip,
+                        convert_to_mmd_zip=convert_to_mmd_zip,
+                        convert_to_pptx=convert_to_pptx,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
@@ -275,6 +293,9 @@ class MathpixClient:
             convert_to_html: Optional[bool] = False,
             convert_to_pdf: Optional[bool] = False,
             convert_to_latex_pdf: Optional[bool] = False,
+            convert_to_md_zip: Optional[bool] = False,
+            convert_to_mmd_zip: Optional[bool] = False,
+            convert_to_pptx: Optional[bool] = False,
     ):
         """Converts Mathpix Markdown (MMD) to various output formats.
 
@@ -286,6 +307,9 @@ class MathpixClient:
             convert_to_html: Optional boolean to convert your result to html
             convert_to_pdf: Optional boolean to convert your result to pdf
             convert_to_latex_pdf: Optional boolean to convert your result to pdf containing LaTeX
+            convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
+            convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
+            convert_to_pptx: Optional boolean to automatically convert your result to pptx
 
         Returns:
             Conversion: A new Conversion instance.
@@ -311,6 +335,12 @@ class MathpixClient:
             options["formats"]['pdf'] = True
         if convert_to_latex_pdf:
             options["formats"]['latex.pdf'] = True
+        if convert_to_md_zip:
+            options["formats"]['md.zip'] = True
+        if convert_to_mmd_zip:
+            options["formats"]['mmd.zip'] = True
+        if convert_to_pptx:
+            options["formats"]['pptx'] = True
         if len(options['formats'].items()) == 0:
             raise ValidationError("At least one format is required.")
         try:
@@ -330,7 +360,10 @@ class MathpixClient:
                 convert_to_tex_zip=convert_to_tex_zip,
                 convert_to_html=convert_to_html,
                 convert_to_pdf=convert_to_pdf,
-                convert_to_latex_pdf=convert_to_latex_pdf
+                convert_to_latex_pdf=convert_to_latex_pdf,
+                convert_to_md_zip=convert_to_md_zip,
+                convert_to_mmd_zip=convert_to_mmd_zip,
+                convert_to_pptx=convert_to_pptx
             )
         except requests.exceptions.RequestException as e:
             logger.error(f"Conversion request failed: {e}")

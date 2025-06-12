@@ -133,5 +133,113 @@ def test_bad_pdf_path(client):
         client.pdf_new(file_path=pdf_file_path)
 
 
+def test_pdf_get_result_md_zip(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_md_zip=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    md_zip_bytes = pdf.to_md_zip_bytes()
+    assert md_zip_bytes is not None
+    assert isinstance(md_zip_bytes, bytes), f"Expected md.zip output to be of type bytes, got {type(md_zip_bytes)}"
+    assert md_zip_bytes.startswith(b'PK'), "Expected md.zip to be a valid ZIP file"
+
+
+def test_pdf_save_md_zip_to_local_path(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_md_zip=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    output_dir = 'output'
+    output_name = 'sample.md.zip'
+    output_path = os.path.join(output_dir, output_name)
+    file_path = pdf.to_md_zip_file(path=output_path)
+    try:
+        assert os.path.exists(file_path)
+        assert os.path.getsize(file_path) > 0
+    finally:
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+
+def test_pdf_get_result_mmd_zip(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_mmd_zip=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    mmd_zip_bytes = pdf.to_mmd_zip_bytes()
+    assert mmd_zip_bytes is not None
+    assert isinstance(mmd_zip_bytes, bytes), f"Expected mmd.zip output to be of type bytes, got {type(mmd_zip_bytes)}"
+    assert mmd_zip_bytes.startswith(b'PK'), "Expected mmd.zip to be a valid ZIP file"
+
+
+def test_pdf_save_mmd_zip_to_local_path(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_mmd_zip=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    output_dir = 'output'
+    output_name = 'sample.mmd.zip'
+    output_path = os.path.join(output_dir, output_name)
+    file_path = pdf.to_mmd_zip_file(path=output_path)
+    try:
+        assert os.path.exists(file_path)
+        assert os.path.getsize(file_path) > 0
+    finally:
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+
+def test_pdf_get_result_pptx(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_pptx=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    pptx_bytes = pdf.to_pptx_bytes()
+    assert pptx_bytes is not None
+    assert isinstance(pptx_bytes, bytes), f"Expected pptx output to be of type bytes, got {type(pptx_bytes)}"
+    assert pptx_bytes.startswith(b'PK'), "Expected pptx to be a valid ZIP-based file"
+
+
+def test_pdf_save_pptx_to_local_path(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_pptx=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    output_dir = 'output'
+    output_name = 'sample.pptx'
+    output_path = os.path.join(output_dir, output_name)
+    file_path = pdf.to_pptx_file(path=output_path)
+    try:
+        assert os.path.exists(file_path)
+        assert os.path.getsize(file_path) > 0
+    finally:
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
+
 if __name__ == '__main__':
     client = MathpixClient()

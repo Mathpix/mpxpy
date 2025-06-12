@@ -23,6 +23,9 @@ class Conversion:
         convert_to_html: Optional boolean to automatically convert your result to html
         convert_to_pdf: Optional boolean to automatically convert your result to pdf
         convert_to_latex_pdf: Optional boolean to automatically convert your result to pdf containing LaTeX
+        convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
+        convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
+        convert_to_pptx: Optional boolean to automatically convert your result to pptx
     """
     def __init__(
             self,
@@ -33,7 +36,10 @@ class Conversion:
             convert_to_tex_zip: Optional[bool] = False,
             convert_to_html: Optional[bool] = False,
             convert_to_pdf: Optional[bool] = False,
-            convert_to_latex_pdf: Optional[bool] = False
+            convert_to_latex_pdf: Optional[bool] = False,
+            convert_to_md_zip: Optional[bool] = False,
+            convert_to_mmd_zip: Optional[bool] = False,
+            convert_to_pptx: Optional[bool] = False,
     ):
         """Initialize a Conversion instance.
 
@@ -58,6 +64,9 @@ class Conversion:
         self.convert_to_html = convert_to_html
         self.convert_to_pdf = convert_to_pdf
         self.convert_to_latex_pdf = convert_to_latex_pdf
+        self.convert_to_md_zip = convert_to_md_zip
+        self.convert_to_mmd_zip = convert_to_mmd_zip
+        self.convert_to_pptx = convert_to_pptx
 
     def wait_until_complete(self, timeout: int=60):
         """Wait for the conversion to complete.
@@ -353,3 +362,78 @@ class Conversion:
             ConversionIncompleteError: If the conversion is not complete
         """
         return self.bytes_result(conversion_format='latex.pdf')
+
+    def to_md_zip_file(self, path: str) -> str:
+        """Save the processed conversion result to a ZIP file containing markdown output and any embedded images.
+
+        Args:
+            path: The local file path where the ZIP output will be saved
+
+        Returns:
+            output_path: The path of the saved ZIP file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='md.zip')
+
+    def to_md_zip_bytes(self) -> bytes:
+        """Get the processed conversion result in ZIPPED markdown format as bytes.
+
+        Returns:
+            bytes: The binary content of the ZIP result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='md.zip')
+
+    def to_mmd_zip_file(self, path: str) -> str:
+        """Save the processed conversion result to a ZIP file containing Mathpix Markdown output and any embedded images.
+
+        Args:
+            path: The local file path where the ZIP output will be saved
+
+        Returns:
+            output_path: The path of the saved ZIP file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='mmd.zip')
+
+    def to_mmd_zip_bytes(self) -> bytes:
+        """Get the processed conversion result in ZIPPED Mathpix Markdown format as bytes.
+
+        Returns:
+            bytes: The binary content of the ZIP result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='mmd.zip')
+
+    def to_pptx_file(self, path: str) -> str:
+        """Save the processed conversion result to a PPTX file.
+
+        Args:
+            path: The local file path where the PPTX output will be saved
+
+        Returns:
+            output_path: The path of the saved PPTX file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='pptx')
+
+    def to_pptx_bytes(self) -> bytes:
+        """Get the processed conversion result in PPTX format as bytes.
+
+        Returns:
+            bytes: The binary content of the PPTX result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='pptx')
