@@ -175,12 +175,6 @@ class MathpixClient:
             options["conversion_formats"]['pdf'] = True
         if convert_to_pptx:
             options["conversion_formats"]['pptx'] = True
-        if (convert_to_mmd_zip or convert_to_md_zip) and self.auth.api_url == 'https://api.mathpix.com':
-            logger.warning("md.zip and mmd.zip features not available in production API")
-            raise NotImplementedError(
-                "md.zip and mmd.zip features are not yet available in the production API. "
-                "This feature will be enabled in a future release."
-            )
         if convert_to_md_zip:
             options["conversion_formats"]['md.zip'] = True
         if convert_to_mmd_zip:
@@ -343,12 +337,6 @@ class MathpixClient:
             options["formats"]['latex.pdf'] = True
         if convert_to_pptx:
             options["formats"]['pptx'] = True
-        if (convert_to_mmd_zip or convert_to_md_zip) and self.auth.api_url == 'https://api.mathpix.com':
-            logger.warning("md.zip and mmd.zip features not available in production API")
-            raise NotImplementedError(
-                "md.zip and mmd.zip features are not yet available in the production API. "
-                "This feature will be enabled in a future release."
-            )
         if convert_to_md_zip:
             options["formats"]['md.zip'] = True
         if convert_to_mmd_zip:

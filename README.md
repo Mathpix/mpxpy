@@ -87,7 +87,7 @@ client = MathpixClient(
 
 # Process a PDF file with multiple conversion formats and options
 pdf = client.pdf_new(
-    url="http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf",
+    url="https://cdn.mathpix.com/examples/cs229-notes1.pdf",
     convert_to_docx=True,
     convert_to_md=True,
     convert_to_pptx=True,
