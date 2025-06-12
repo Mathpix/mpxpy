@@ -90,6 +90,7 @@ pdf = client.pdf_new(
     url="http://cs229.stanford.edu/notes2020spring/cs229-notes1.pdf",
     convert_to_docx=True,
     convert_to_md=True,
+    convert_to_pptx=True,
     # Optional pdf-level improve_mathpix argument is default True
 )
 
@@ -103,6 +104,9 @@ print(md_text)
 # Get the DOCX outputs
 docx_output_path = pdf.to_docx_file(path='output/sample.docx')
 docx_bytes = pdf.to_docx_bytes() # is type bytes
+# Get the PPTX outputs
+pptx_output_path = pdf.to_pptx_file(path='output/sample.pptx')
+pptx_bytes = pdf.to_pptx_bytes() # is type bytes
 # Get the JSON outputs
 lines_json_output_path = pdf.to_lines_json_file(path='output/sample.lines.json')
 lines_json = pdf.to_lines_json() # parses JSON into type Dict
@@ -122,6 +126,7 @@ lines_json = pdf.to_lines_json() # parses JSON into type Dict
 - `convert_to_tex_zip`: Optional boolean to automatically convert your result to tex.zip
 - `convert_to_html`: Optional boolean to automatically convert your result to html
 - `convert_to_pdf`: Optional boolean to automatically convert your result to pdf
+- `convert_to_pptx`: Optional boolean to automatically convert your result to pptx
 
 ### Methods
 
@@ -140,6 +145,8 @@ lines_json = pdf.to_lines_json() # parses JSON into type Dict
 - `to_html_bytes`: Get the processed PDF result in HTML format as bytes.
 - `to_pdf_file`: Save the processed PDF result to a PDF file at a local path.
 - `to_pdf_bytes`: Get the processed PDF result in PDF format as bytes.
+- `to_pptx_file`: Save the processed PDF result to a PPTX file at a local path.
+- `to_pptx_bytes`: Get the processed PDF result as PPTX bytes.
 - `to_lines_json_file`: Save the processed PDF line-by-line result to a JSON file at a local path.
 - `to_lines_json`: Get the processed PDF result in JSON format.
 - `to_lines_mmd_json_file`: Save the processed PDF line-by-line result, including Mathpix Markdown, to a JSON file at a local path.
@@ -201,6 +208,7 @@ conversion = client.conversion_new(
     mmd="\\frac{1}{2}",
     convert_to_docx=True,
     convert_to_md=True,
+    convert_to_pptx=True,
 )
 
 # Wait for conversion to complete
@@ -212,6 +220,9 @@ md_text = conversion.to_md_text() # is of type str
 # Get the DOCX outputs
 docx_output_path = conversion.to_docx_file(path='output/sample.docx')
 docx_bytes = conversion.to_docx_bytes() # is of type bytes
+# Get the PPTX outputs
+pptx_output_path = conversion.to_pptx_file(path='output/sample.pptx')
+pptx_bytes = conversion.to_pptx_bytes() # is of type bytes
 ```
 
 ## Conversion Class Documentation
@@ -226,6 +237,7 @@ docx_bytes = conversion.to_docx_bytes() # is of type bytes
 - `convert_to_html`: Optional boolean to automatically convert your result to html
 - `convert_to_pdf`: Optional boolean to automatically convert your result to pdf
 - `convert_to_latex_pdf`: Optional boolean to automatically convert your result to pdf containing LaTeX
+- `convert_to_pptx`: Optional boolean to automatically convert your result to pptx
 
 ### Methods
 
@@ -245,6 +257,8 @@ docx_bytes = conversion.to_docx_bytes() # is of type bytes
 - `to_pdf_bytes`: Get the processed conversion result in PDF format as bytes.
 - `to_latex_pdf_file`: Save the processed conversion result to a PDF file containing LaTeX at a local path.
 - `to_latex_pdf_bytes`: Get the processed conversion result in PDF format as bytes (with LaTeX).
+- `to_pptx_file`: Save the processed conversion result to a PPTX file at a local path.
+- `to_pptx_bytes`: Get the processed conversion result as PPTX bytes.
 
 # Error Handling
 

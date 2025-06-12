@@ -97,6 +97,55 @@ def test_pdf_get_result_lines_json(client):
     assert lines_json is not None
     assert isinstance(lines_json, Dict), f"Expected lines.json output to be a dict, got {type(lines_json)}"
 
+
+def test_pdf_convert_to_pptx(client):
+    pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
+    pdf = client.pdf_new(
+        url=pdf_file_url,
+        convert_to_pptx=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    status = pdf.pdf_status()
+    assert status['status'] == 'completed'
+
+
+def test_pdf_get_result_pptx_bytes(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_pptx=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    pptx_bytes = pdf.to_pptx_bytes()
+    assert pptx_bytes is not None
+    assert len(pptx_bytes) > 0
+    assert pptx_bytes.startswith(b'PK')  # PPTX files are ZIP-based and start with PK
+
+
+def test_pdf_save_pptx_to_local_path(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_pptx=True
+    )
+    assert pdf.pdf_id is not None
+    completed = pdf.wait_until_complete(timeout=60)
+    assert completed
+    output_dir = 'output'
+    output_name = 'sample.pptx'
+    output_path = os.path.join(output_dir, output_name)
+    file_path = pdf.to_pptx_file(path=output_path)
+    try:
+        assert os.path.exists(file_path)
+        assert os.path.getsize(file_path) > 0
+    finally:
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
 def test_pdf_get_result_docx(client):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
