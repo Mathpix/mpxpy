@@ -1,7 +1,9 @@
-mpxpy.egg-info
-local.env
-mpxpy/__pycache__
 .idea
+.vscode/
+dist
+local.env
+mpxpy.egg-info
+mpxpy/__pycache__
 tests/__pycache__
 tests/output
 dist

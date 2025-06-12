@@ -144,9 +144,7 @@ class MathpixClient:
             "math_inline_delimiters": ["$", "$"],
             "rm_spaces": True,
             "conversion_formats": {},
-            "metadata": {
-                "improve_mathpix": improve_mathpix,
-            },
+            "improve_mathpix": improve_mathpix,
         }
         if file_batch_id:
             options["file_batch_id"] = file_batch_id
