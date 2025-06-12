@@ -7,4 +7,5 @@ mpxpy/__pycache__
 tests/__pycache__
 tests/output
 dist
+build/
 .DS_Store
