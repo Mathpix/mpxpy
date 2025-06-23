@@ -240,6 +240,41 @@ def test_pdf_save_pptx_to_local_path(client):
         if os.path.exists(output_dir) and os.path.isdir(output_dir):
             shutil.rmtree(output_dir)
 
+def test_pdf_get_result_html_zip(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_html_zip=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    html_zip_bytes = pdf.to_html_zip_bytes()
+    assert html_zip_bytes is not None
+    assert isinstance(html_zip_bytes, bytes), f"Expected html_zip output to be of type bytes, got {type(html_zip_bytes)}"
+    assert html_zip_bytes.startswith(b'PK'), "Expected html_zip to be a valid ZIP-based file"
+
+
+def test_pdf_save_html_zip_to_local_path(client):
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(
+        file_path=pdf_file_path,
+        convert_to_html_zip=True
+    )
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    output_dir = 'output'
+    output_name = 'sample.html_zip'
+    output_path = os.path.join(output_dir, output_name)
+    file_path = pdf.to_html_zip_file(path=output_path)
+    try:
+        assert os.path.exists(file_path)
+        assert os.path.getsize(file_path) > 0
+    finally:
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
 
 if __name__ == '__main__':
     client = MathpixClient()

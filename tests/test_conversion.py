@@ -164,5 +164,35 @@ def test_conversion_save_pptx_to_local_path(client):
         if os.path.exists(output_dir) and os.path.isdir(output_dir):
             shutil.rmtree(output_dir)
 
+def test_conversion_get_result_html_zip(client):
+    mmd = '''
+    \( f(x)=\left\{\begin{array}{ll}x^{2} & \text { if } x<0 \\ 2 x & \text { if } x \geq 0\end{array}\right. \)
+    '''
+    conversion = client.conversion_new(mmd=mmd, convert_to_html_zip=True)
+    assert conversion.conversion_id is not None
+    conversion.wait_until_complete(timeout=10)
+    html_zip_bytes = conversion.to_html_zip_bytes()
+    assert html_zip_bytes is not None
+    assert len(html_zip_bytes) > 0
+    assert html_zip_bytes.startswith(b'PK') # Test whether it matches the PPTX file signature
+
+def test_conversion_save_html_zip_to_local_path(client):
+    mmd = '''
+    \( f(x)=\left\{\begin{array}{ll}x^{2} & \text { if } x<0 \\ 2 x & \text { if } x \geq 0\end{array}\right. \)
+    '''
+    conversion = client.conversion_new(mmd=mmd, convert_to_html_zip=True)
+    assert conversion.conversion_id is not None
+    output_dir = 'output'
+    output_name = 'result.html.zip'
+    output_path = os.path.join(output_dir, output_name)
+    try:
+        conversion.wait_until_complete(timeout=10)
+        path = conversion.to_html_zip_file(path=output_path)
+        assert os.path.exists(path)
+        assert os.path.getsize(path) > 0
+    finally:
+        if os.path.exists(output_dir) and os.path.isdir(output_dir):
+            shutil.rmtree(output_dir)
+
 if __name__ == '__main__':
     client = MathpixClient()

@@ -29,6 +29,7 @@ class Pdf:
         convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
         convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
         convert_to_pptx: Optional boolean to automatically convert your result to pptx
+        convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
         improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
         file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
         webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
@@ -51,6 +52,7 @@ class Pdf:
             convert_to_md_zip: Optional[bool] = False,
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
+            convert_to_html_zip: Optional[bool] = False,
             improve_mathpix: Optional[bool] = False,
             file_batch_id: Optional[str] = None,
             webhook_url: Optional[str] = None,
@@ -74,6 +76,7 @@ class Pdf:
             convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
+            convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
             webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
@@ -103,6 +106,7 @@ class Pdf:
         self.convert_to_md_zip = convert_to_md_zip
         self.convert_to_mmd_zip = convert_to_mmd_zip
         self.convert_to_pptx = convert_to_pptx
+        self.convert_to_html_zip = convert_to_html_zip
         self.improve_mathpix=improve_mathpix
         self.file_batch_id = file_batch_id
         self.webhook_url = webhook_url
@@ -133,14 +137,15 @@ class Pdf:
         while attempt < timeout and not pdf_completed:
             try:
                 status = self.pdf_status()
-                logger.info(f"PDF status check attempt {attempt}/{timeout}: {status}")
+                logger.debug(f"PDF status check attempt {attempt}/{timeout}: {status}")
                 if isinstance(status, dict) and 'status' in status and status['status'] == 'completed':
                     pdf_completed = True
                     logger.info(f"PDF {self.pdf_id} processing completed")
                     break
                 elif isinstance(status, dict) and 'error' in status:
                     logger.error(f"Error in PDF {self.pdf_id} processing: {status.get('error')}")
-                logger.info(f"PDF {self.pdf_id} processing in progress, waiting...")
+                    break
+                logger.debug(f"PDF {self.pdf_id} processing in progress, waiting...")
             except Exception as e:
                 logger.error(f"Exception during PDF status check: {e}")
             attempt += 1
@@ -151,12 +156,12 @@ class Pdf:
             while attempt < timeout and not conversion_completed:
                 try:
                     conv_status = self.pdf_conversion_status()
-                    logger.info(f"Conversion status check attempt {attempt}/{timeout}: {conv_status}")
+                    logger.debug(f"Conversion status check attempt {attempt}/{timeout}: {conv_status}")
                     if (isinstance(conv_status, dict) and 
                         'error' in conv_status and 
                         'error_info' in conv_status and 
                         conv_status['error_info'].get('id') == 'cnv_unknown_id'):
-                        logger.info("Conversion ID not found yet, trying again...")
+                        logger.debug("Conversion ID not found yet, trying again...")
                     elif (isinstance(conv_status, dict) and 
                         'status' in conv_status and 
                         conv_status['status'] == 'completed' and
@@ -167,7 +172,7 @@ class Pdf:
                         conversion_completed = True
                         break
                     else:
-                        logger.info(f"Conversions for PDF {self.pdf_id} in progress, waiting...")
+                        logger.debug(f"Conversions for PDF {self.pdf_id} in progress, waiting...")
                 except Exception as e:
                     logger.error(f"Exception during conversion status check: {e}")
                 attempt += 1
@@ -182,7 +187,7 @@ class Pdf:
         Returns:
             dict: JSON response containing PDF processing status information.
         """
-        logger.info(f"Getting status for PDF {self.pdf_id}")
+        logger.debug(f"Getting status for PDF {self.pdf_id}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}')
         response = get(endpoint, headers=self.auth.headers)
         return response.json()
@@ -193,7 +198,7 @@ class Pdf:
         Returns:
             dict: JSON response containing conversion status information.
         """
-        logger.info(f"Getting conversion status for PDF {self.pdf_id}")
+        logger.debug(f"Getting conversion status for PDF {self.pdf_id}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.pdf_id}')
         response = get(endpoint, headers=self.auth.headers)
         return response.json()
@@ -563,3 +568,28 @@ class Pdf:
             ConversionIncompleteError: If the conversion is not complete
         """
         return self.bytes_result(conversion_format='pptx')
+
+    def to_html_zip_file(self, path: str) -> str:
+        """Save the processed conversion result to a ZIP file containing HTML output and any embedded images.
+
+        Args:
+            path: The local file path where the ZIP output will be saved
+
+        Returns:
+            output_path: The path of the saved ZIP file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='html.zip')
+
+    def to_html_zip_bytes(self) -> bytes:
+        """Get the processed conversion result in HTML ZIP format as bytes.
+
+        Returns:
+            bytes: The binary content of the ZIP result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='html.zip')

@@ -134,9 +134,10 @@ lines_json = pdf.to_lines_json() # parses JSON into type Dict
 - `convert_to_tex_zip`: Optional boolean to automatically convert your result to tex.zip
 - `convert_to_html`: Optional boolean to automatically convert your result to html
 - `convert_to_pdf`: Optional boolean to automatically convert your result to pdf
-- `convert_to_md_zip`: Optional boolean to automatically convert your result to md.zip (markdown with embedded images)
-- `convert_to_mmd_zip`: Optional boolean to automatically convert your result to mmd.zip (Mathpix markdown with embedded images)
+- `convert_to_md_zip`: Optional boolean to automatically convert your result to md.zip (markdown with local images folder)
+- `convert_to_mmd_zip`: Optional boolean to automatically convert your result to mmd.zip (Mathpix markdown with local images folder)
 - `convert_to_pptx`: Optional boolean to automatically convert your result to pptx (PowerPoint)
+- `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip (HTML with local images folder)
 
 ### Methods
 
@@ -165,6 +166,8 @@ lines_json = pdf.to_lines_json() # parses JSON into type Dict
 - `to_mmd_zip_bytes`: Get the processed PDF result in ZIPPED Mathpix Markdown format as bytes.
 - `to_pptx_file`: Save the processed PDF result to a PPTX file.
 - `to_pptx_bytes`: Get the processed PDF result in PPTX format as bytes.
+- `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images.
+- `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes.
 
 # Process Images
 
@@ -258,9 +261,10 @@ pptx_bytes = conversion.to_pptx_bytes() # is of type bytes
 - `convert_to_html`: Optional boolean to automatically convert your result to html
 - `convert_to_pdf`: Optional boolean to automatically convert your result to pdf
 - `convert_to_latex_pdf`: Optional boolean to automatically convert your result to pdf containing LaTeX
-- `convert_to_md_zip`: Optional boolean to automatically convert your result to md.zip (markdown with embedded images)
-- `convert_to_mmd_zip`: Optional boolean to automatically convert your result to mmd.zip (Mathpix markdown with embedded images)
+- `convert_to_md_zip`: Optional boolean to automatically convert your result to md.zip (markdown with local images folder)
+- `convert_to_mmd_zip`: Optional boolean to automatically convert your result to mmd.zip (Mathpix markdown with local images folder)
 - `convert_to_pptx`: Optional boolean to automatically convert your result to pptx (PowerPoint)
+- `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip (HTML with local images folder)
 
 ### Methods
 
@@ -286,6 +290,8 @@ pptx_bytes = conversion.to_pptx_bytes() # is of type bytes
 - `to_mmd_zip_bytes`: Get the processed conversion result in ZIPPED Mathpix Markdown format as bytes.
 - `to_pptx_file`: Save the processed conversion result to a PPTX file.
 - `to_pptx_bytes`: Get the processed conversion result in PPTX format as bytes.
+- `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images.
+- `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes.
 
 # Error Handling
 
@@ -341,4 +347,15 @@ pip install -e ".[dev]"
 pip install -r requirements.txt
 # Run tests
 pytest
+```
+
+## Logging
+
+To configure the logger level, which is set at `INFO` by default, set the MATHPIX_LOG_LEVEL env variable to the desired logger level. 
+
+- `DEBUG`: logs all events, including polling events
+- `INFO`: logs all events except for polling events
+
+```
+MATHPIX_LOG_LEVEL=DEBUG
 ```

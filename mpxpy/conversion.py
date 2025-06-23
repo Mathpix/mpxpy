@@ -26,6 +26,7 @@ class Conversion:
         convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
         convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
         convert_to_pptx: Optional boolean to automatically convert your result to pptx
+        convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
     """
     def __init__(
             self,
@@ -40,12 +41,23 @@ class Conversion:
             convert_to_md_zip: Optional[bool] = False,
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
+            convert_to_html_zip: Optional[bool] = False,
     ):
         """Initialize a Conversion instance.
 
         Args:
             auth: Auth instance containing Mathpix API credentials.
             conversion_id: The unique identifier for the conversion.
+            convert_to_docx: Optional boolean to automatically convert your result to docx
+            convert_to_md: Optional boolean to automatically convert your result to md
+            convert_to_tex_zip: Optional boolean to automatically convert your result to tex.zip
+            convert_to_html: Optional boolean to automatically convert your result to html
+            convert_to_pdf: Optional boolean to automatically convert your result to pdf
+            convert_to_latex_pdf: Optional boolean to automatically convert your result to pdf containing LaTeX
+            convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
+            convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
+            convert_to_pptx: Optional boolean to automatically convert your result to pptx
+            convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
 
         Raises:
             ValidationError: If auth is not provided or conversion_id is empty.
@@ -67,6 +79,7 @@ class Conversion:
         self.convert_to_md_zip = convert_to_md_zip
         self.convert_to_mmd_zip = convert_to_mmd_zip
         self.convert_to_pptx = convert_to_pptx
+        self.convert_to_html_zip = convert_to_html_zip
 
     def wait_until_complete(self, timeout: int=60):
         """Wait for the conversion to complete.
@@ -88,7 +101,7 @@ class Conversion:
         attempt = 1
         completed = False
         while attempt < timeout and not completed:
-            logger.info(f'Checking conversion status... ({attempt}/{timeout})')
+            logger.debug(f'Checking conversion status... ({attempt}/{timeout})')
             conversion_status = self.conversion_status()
             if (conversion_status['status'] == 'completed' and all(
                     format_data['status'] == 'completed' or format_data['status'] == 'error'
@@ -102,7 +115,7 @@ class Conversion:
             time.sleep(1)
             attempt += 1
         if not completed:
-            logger.warning(f"Conversion {self.conversion_id} did not complete within timeout period ({timeout}s)")
+            logger.debug(f"Conversion {self.conversion_id} did not complete within timeout period ({timeout}s)")
         return completed
 
     def conversion_status(self):
@@ -378,7 +391,7 @@ class Conversion:
         return self.save_file(path=path, conversion_format='md.zip')
 
     def to_md_zip_bytes(self) -> bytes:
-        """Get the processed conversion result in ZIPPED markdown format as bytes.
+        """Get the processed conversion result in markdown ZIP format as bytes.
 
         Returns:
             bytes: The binary content of the ZIP result
@@ -403,7 +416,7 @@ class Conversion:
         return self.save_file(path=path, conversion_format='mmd.zip')
 
     def to_mmd_zip_bytes(self) -> bytes:
-        """Get the processed conversion result in ZIPPED Mathpix Markdown format as bytes.
+        """Get the processed conversion result in Mathpix Markdown ZIP format as bytes.
 
         Returns:
             bytes: The binary content of the ZIP result
@@ -437,3 +450,28 @@ class Conversion:
             ConversionIncompleteError: If the conversion is not complete
         """
         return self.bytes_result(conversion_format='pptx')
+
+    def to_html_zip_file(self, path: str) -> str:
+        """Save the processed conversion result to a ZIP file containing HTML output and any embedded images.
+
+        Args:
+            path: The local file path where the ZIP output will be saved
+
+        Returns:
+            output_path: The path of the saved ZIP file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='html.zip')
+
+    def to_html_zip_bytes(self) -> bytes:
+        """Get the processed conversion result in HTML ZIP format as bytes.
+
+        Returns:
+            bytes: The binary content of the ZIP result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='html.zip')

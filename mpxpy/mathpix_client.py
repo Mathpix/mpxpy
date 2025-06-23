@@ -8,7 +8,7 @@ from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
 from mpxpy.auth import Auth
-from mpxpy.logger import logger
+from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError
 from mpxpy.request_handler import post
 
@@ -33,6 +33,7 @@ class MathpixClient:
         """
         logger.info("Initializing MathpixClient")
         self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url)
+        configure_logging()
         self.improve_mathpix = improve_mathpix
         logger.info(f"MathpixClient initialized with API URL: {self.auth.api_url}")
 
@@ -83,6 +84,7 @@ class MathpixClient:
             convert_to_md_zip: Optional[bool] = False,
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
+            convert_to_html_zip: Optional[bool] = False,
             improve_mathpix: Optional[bool] = True,
             file_batch_id: Optional[str] = None,
             webhook_url: Optional[str] = None,
@@ -104,6 +106,7 @@ class MathpixClient:
             convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
+            convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
             webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
@@ -179,6 +182,8 @@ class MathpixClient:
             options["conversion_formats"]['md.zip'] = True
         if convert_to_mmd_zip:
             options["conversion_formats"]['mmd.zip'] = True
+        if convert_to_html_zip:
+            options["conversion_formats"]['html.zip'] = True
         data = {
             "options_json": json.dumps(options)
         }
@@ -209,6 +214,7 @@ class MathpixClient:
                         convert_to_md_zip=convert_to_md_zip,
                         convert_to_mmd_zip=convert_to_mmd_zip,
                         convert_to_pptx=convert_to_pptx,
+                        convert_to_html_zip=convert_to_html_zip,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
@@ -217,7 +223,8 @@ class MathpixClient:
                         webhook_enabled_events=webhook_enabled_events,
                     )
                 except requests.exceptions.RequestException as e:
-                    logger.error(f"PDF upload failed: {e}")
+                    if response_json:
+                        logger.info(f"PDF upload failed: {response_json}")
                     raise MathpixClientError(f"Mathpix PDF request failed: {e}")
         else:
             logger.info(f"Creating new PDF: url={url}")
@@ -226,7 +233,6 @@ class MathpixClient:
                 response = post(endpoint, json=options, headers=self.auth.headers)
                 response.raise_for_status()
                 response_json = response.json()
-                logger.info(response_json)
                 pdf_id = response_json['pdf_id']
                 logger.info(f"PDF from URL processing started, PDF ID: {pdf_id}")
                 return Pdf(
@@ -242,6 +248,7 @@ class MathpixClient:
                         convert_to_md_zip=convert_to_md_zip,
                         convert_to_mmd_zip=convert_to_mmd_zip,
                         convert_to_pptx=convert_to_pptx,
+                        convert_to_html_zip=convert_to_html_zip,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         webhook_url=webhook_url,
@@ -249,8 +256,9 @@ class MathpixClient:
                         webhook_payload=webhook_payload,
                         webhook_enabled_events=webhook_enabled_events,
                     )
-            except requests.exceptions.RequestException as e:
-                logger.error(f"URL processing failed: {e}")
+            except Exception as e:
+                if response_json:
+                    logger.info(f"PDF upload failed: {response_json}")
                 raise MathpixClientError(f"Mathpix PDF request failed: {e}")
 
     def file_batch_new(self):
@@ -296,6 +304,7 @@ class MathpixClient:
             convert_to_md_zip: Optional[bool] = False,
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
+            convert_to_html_zip: Optional[bool] = False,
     ):
         """Converts Mathpix Markdown (MMD) to various output formats.
 
@@ -310,6 +319,7 @@ class MathpixClient:
             convert_to_md_zip: Optional boolean to automatically convert your result to md.zip
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
+            convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
 
         Returns:
             Conversion: A new Conversion instance.
@@ -341,6 +351,8 @@ class MathpixClient:
             options["formats"]['md.zip'] = True
         if convert_to_mmd_zip:
             options["formats"]['mmd.zip'] = True
+        if convert_to_html_zip:
+            options["formats"]['html.zip'] = True
         if len(options['formats'].items()) == 0:
             raise ValidationError("At least one format is required.")
         try:
@@ -363,8 +375,10 @@ class MathpixClient:
                 convert_to_latex_pdf=convert_to_latex_pdf,
                 convert_to_md_zip=convert_to_md_zip,
                 convert_to_mmd_zip=convert_to_mmd_zip,
-                convert_to_pptx=convert_to_pptx
+                convert_to_pptx=convert_to_pptx,
+                convert_to_html_zip=convert_to_html_zip,
             )
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Conversion request failed: {e}")
-            raise MathpixClientError(f"Conversion request failed: {e}")
+        except Exception as e:
+            if response_json:
+                logger.info(f"PDF upload failed: {response_json}")
+            raise MathpixClientError(f"Mathpix PDF request failed: {e}")
