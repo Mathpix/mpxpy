@@ -87,7 +87,7 @@ client = MathpixClient(
 
 # Process a PDF file with multiple conversion formats and options
 pdf = client.pdf_new(
-    url="https://cdn.mathpix.com/examples/cs229-notes1.pdf",
+    file_path='/path/to/pdf/sample.pdf',
     convert_to_docx=True,
     convert_to_md=True,
     convert_to_pptx=True,
@@ -182,7 +182,7 @@ client = MathpixClient(
 )
 # Process an image file
 image = client.image_new(
-    url="https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
+    file_path='/path/to/image/sample.jpg',
     # Optional image-level improve_mathpix argument is default True
 )
 

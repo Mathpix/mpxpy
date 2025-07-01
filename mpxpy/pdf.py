@@ -568,7 +568,7 @@ class Pdf:
             ConversionIncompleteError: If the conversion is not complete
         """
         return self.bytes_result(conversion_format='pptx')
-
+    
     def to_html_zip_file(self, path: str) -> str:
         """Save the processed conversion result to a ZIP file containing HTML output and any embedded images.
 
