@@ -195,4 +195,4 @@ def test_conversion_save_html_zip_to_local_path(client):
             shutil.rmtree(output_dir)
 
 if __name__ == '__main__':
-    client = MathpixClient()
+    pass

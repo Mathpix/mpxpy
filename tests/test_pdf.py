@@ -277,4 +277,5 @@ def test_pdf_save_html_zip_to_local_path(client):
 
 
 if __name__ == '__main__':
-    client = MathpixClient()
+    pass
+

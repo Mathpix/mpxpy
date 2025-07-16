@@ -16,6 +16,7 @@ def test_image_conversion_remote_file(client):
     image_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
     image = client.image_new(
         url=image_file_url,
+        include_line_data=True
     )
     lines_result = image.lines_json()
     assert lines_result is not None
@@ -65,6 +66,14 @@ def test_invalid_image_arguments(client):
     with pytest.raises(ValidationError):
         client.image_new(file_path=image_file_path, url=image_file_url)
 
+def test_async_image(client):
+    image_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
+    image = client.image_new(url=image_file_url, is_async=True)
+    assert image.wait_until_complete(timeout=20), f"Async image request did not complete within the timeout period"
+    result = image.results()
+    assert result is not None, "Async image result is None"
+    assert 'image_id' in result, "Async image result has no image_id"
+    assert 'result' in result, "Async image result has no result"
 
 if __name__ == '__main__':
-    client = MathpixClient()
+    pass

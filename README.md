@@ -138,36 +138,37 @@ lines_json = pdf.to_lines_json() # parses JSON into type Dict
 - `convert_to_mmd_zip`: Optional boolean to automatically convert your result to mmd.zip (Mathpix markdown with local images folder)
 - `convert_to_pptx`: Optional boolean to automatically convert your result to pptx (PowerPoint)
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip (HTML with local images folder)
+- `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
 
 ### Methods
 
-- `wait_until_complete`: Wait for the PDF processing and optional conversions to complete.
-- `pdf_status`: Get the current status of the PDF processing.
-- `pdf_conversion_status`: Get the current status of the PDF conversions.
-- `to_docx_file`: Save the processed PDF result to a DOCX file at a local path.
-- `to_docx_bytes`: Get the processed PDF result as DOCX bytes.
-- `to_md_file`: Save the processed PDF result to a Markdown file at a local path.
-- `to_md_text`: Get the processed PDF result as a Markdown string.
-- `to_mmd_file`: Save the processed PDF result to a Mathpix Markdown file at a local path.
-- `to_mmd_text`: Get the processed PDF result as a Mathpix Markdown string.
-- `to_tex_zip_file`: Save the processed PDF result to a tex.zip file at a local path.
-- `to_tex_zip_bytes`: Get the processed PDF result in tex.zip format as bytes.
-- `to_html_file`: Save the processed PDF result to a HTML file at a local path.
-- `to_html_bytes`: Get the processed PDF result in HTML format as bytes.
-- `to_pdf_file`: Save the processed PDF result to a PDF file at a local path.
-- `to_pdf_bytes`: Get the processed PDF result in PDF format as bytes.
-- `to_lines_json_file`: Save the processed PDF line-by-line result to a JSON file at a local path.
-- `to_lines_json`: Get the processed PDF result in JSON format.
-- `to_lines_mmd_json_file`: Save the processed PDF line-by-line result, including Mathpix Markdown, to a JSON file at a local path.
-- `to_lines_mmd_json`: Get the processed PDF result in JSON format with text in Mathpix Markdown.
-- `to_md_zip_file`: Save the processed PDF result to a ZIP file containing markdown output and any embedded images.
-- `to_md_zip_bytes`: Get the processed PDF result in ZIPPED markdown format as bytes.
-- `to_mmd_zip_file`: Save the processed PDF result to a ZIP file containing Mathpix Markdown output and any embedded images.
-- `to_mmd_zip_bytes`: Get the processed PDF result in ZIPPED Mathpix Markdown format as bytes.
-- `to_pptx_file`: Save the processed PDF result to a PPTX file.
-- `to_pptx_bytes`: Get the processed PDF result in PPTX format as bytes.
-- `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images.
-- `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes.
+- `wait_until_complete`: Wait for the PDF processing and optional conversions to complete
+- `pdf_status`: Get the current status of the PDF processing
+- `pdf_conversion_status`: Get the current status of the PDF conversions
+- `to_docx_file`: Save the processed PDF result to a DOCX file at a local path
+- `to_docx_bytes`: Get the processed PDF result as DOCX bytes
+- `to_md_file`: Save the processed PDF result to a Markdown file at a local path
+- `to_md_text`: Get the processed PDF result as a Markdown string
+- `to_mmd_file`: Save the processed PDF result to a Mathpix Markdown file at a local path
+- `to_mmd_text`: Get the processed PDF result as a Mathpix Markdown string
+- `to_tex_zip_file`: Save the processed PDF result to a tex.zip file at a local path
+- `to_tex_zip_bytes`: Get the processed PDF result in tex.zip format as bytes
+- `to_html_file`: Save the processed PDF result to a HTML file at a local path
+- `to_html_bytes`: Get the processed PDF result in HTML format as bytes
+- `to_pdf_file`: Save the processed PDF result to a PDF file at a local path
+- `to_pdf_bytes`: Get the processed PDF result in PDF format as bytes
+- `to_lines_json_file`: Save the processed PDF line-by-line result to a JSON file at a local path
+- `to_lines_json`: Get the processed PDF result in JSON format
+- `to_lines_mmd_json_file`: Save the processed PDF line-by-line result, including Mathpix Markdown, to a JSON file at a local path
+- `to_lines_mmd_json`: Get the processed PDF result in JSON format with text in Mathpix Markdown
+- `to_md_zip_file`: Save the processed PDF result to a ZIP file containing markdown output and any embedded images
+- `to_md_zip_bytes`: Get the processed PDF result in ZIPPED markdown format as bytes
+- `to_mmd_zip_file`: Save the processed PDF result to a ZIP file containing Mathpix Markdown output and any embedded images
+- `to_mmd_zip_bytes`: Get the processed PDF result in ZIPPED Mathpix Markdown format as bytes
+- `to_pptx_file`: Save the processed PDF result to a PPTX file
+- `to_pptx_bytes`: Get the processed PDF result in PPTX format as bytes
+- `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images
+- `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes
 
 # Process Images
 
@@ -186,6 +187,20 @@ image = client.image_new(
     # Optional image-level improve_mathpix argument is default True
 )
 
+# Process an image file with various options
+tagged_image = client.image_new(
+    file_path='/path/to/image/sample.jpg',
+    tags=['tag']
+)
+include_line_data = client.image_new(
+    file_path='/path/to/image/sample.jpg',
+    include_line_data=True
+)
+
+# Get the full response
+result = image.results()
+print(result)
+
 # Get the Mathpix Markdown (MMD) representation
 mmd = image.mmd()
 print(mmd)
@@ -193,20 +208,38 @@ print(mmd)
 # Get line-by-line OCR data
 lines = image.lines_json()
 print(lines)
+
+# Make an async image request and get its results
+async_image = client.image_new(
+    file_path='/path/to/image/sample.jpg',
+    is_async=True
+)
+async_image.wait_until_complete(timeout=5)
+result = async_image.results()
 ```
 
 ## Image Class Documentation
 
 ### Properties
 
-- `auth`: An Auth instance with Mathpix credentials.
-- `file_path`: Path to a local image file, if using a local file.
-- `url`: URL of a remote image, if using a remote file.
+- `auth`: An Auth instance with Mathpix credentials
+- `request_id`: A string storing the request_id of the image
+- `file_path`: Path to a local image file, if using a local file
+- `url`: URL of a remote image, if using a remote file
+- `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
+- `include_line_data`: Optional boolean to include line by line OCR data
+- `metadata`: Optional dict to attach metadata to a request
+- `is_async`: Optional boolean to enable non-interactive requests
+- `result`: A Dict to containing a request's result as initially configured
 
 ### Methods
 
-- `lines_json`: Get line-by-line OCR data for the image.
-- `mmd`: Get the Mathpix Markdown (MMD) representation of the image.
+- `results`: Get the full JSON response for the image
+- `wait_until_complete`: Wait for async image processing to complete
+- `lines_json`: Get line-by-line OCR data for the image
+- `mmd`: Get the Mathpix Markdown (MMD) representation of the image
+- `latex_styled`: Get the latex_styled representation of the image.
+- `html`: Get the html representation of the image.
 
 # Convert Mathpix Markdown (MMD)
 
@@ -268,30 +301,30 @@ pptx_bytes = conversion.to_pptx_bytes() # is of type bytes
 
 ### Methods
 
-- `wait_until_complete`: Wait for the conversion to complete.
-- `conversion_status`: Get the current status of the conversion.
-- `to_docx_file`: Save the processed conversion result to a DOCX file at a local path.
-- `to_docx_bytes`: Get the processed conversion result as DOCX bytes.
-- `to_md_file`: Save the processed conversion result to a Markdown file at a local path.
-- `to_md_text`: Get the processed conversion result as a Markdown string.
-- `to_mmd_file`: Save the processed conversion result to a Mathpix Markdown file at a local path.
-- `to_mmd_text`: Get the processed conversion result as a Mathpix Markdown string.
-- `to_tex_zip_file`: Save the processed conversion result to a tex.zip file at a local path.
-- `to_tex_zip_bytes`: Get the processed conversion result in tex.zip format as bytes.
-- `to_html_file`: Save the processed conversion result to a HTML file at a local path.
-- `to_html_bytes`: Get the processed conversion result in HTML format as bytes.
-- `to_pdf_file`: Save the processed conversion result to a PDF file at a local path.
-- `to_pdf_bytes`: Get the processed conversion result in PDF format as bytes.
-- `to_latex_pdf_file`: Save the processed conversion result to a PDF file containing LaTeX at a local path.
-- `to_latex_pdf_bytes`: Get the processed conversion result in PDF format as bytes (with LaTeX).
-- `to_md_zip_file`: Save the processed conversion result to a ZIP file containing markdown output and any embedded images.
-- `to_md_zip_bytes`: Get the processed conversion result in ZIPPED markdown format as bytes.
-- `to_mmd_zip_file`: Save the processed conversion result to a ZIP file containing Mathpix Markdown output and any embedded images.
-- `to_mmd_zip_bytes`: Get the processed conversion result in ZIPPED Mathpix Markdown format as bytes.
-- `to_pptx_file`: Save the processed conversion result to a PPTX file.
-- `to_pptx_bytes`: Get the processed conversion result in PPTX format as bytes.
-- `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images.
-- `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes.
+- `wait_until_complete`: Wait for the conversion to complete
+- `conversion_status`: Get the current status of the conversion
+- `to_docx_file`: Save the processed conversion result to a DOCX file at a local path
+- `to_docx_bytes`: Get the processed conversion result as DOCX bytes
+- `to_md_file`: Save the processed conversion result to a Markdown file at a local path
+- `to_md_text`: Get the processed conversion result as a Markdown string
+- `to_mmd_file`: Save the processed conversion result to a Mathpix Markdown file at a local path
+- `to_mmd_text`: Get the processed conversion result as a Mathpix Markdown string
+- `to_tex_zip_file`: Save the processed conversion result to a tex.zip file at a local path
+- `to_tex_zip_bytes`: Get the processed conversion result in tex.zip format as bytes
+- `to_html_file`: Save the processed conversion result to a HTML file at a local path
+- `to_html_bytes`: Get the processed conversion result in HTML format as bytes
+- `to_pdf_file`: Save the processed conversion result to a PDF file at a local path
+- `to_pdf_bytes`: Get the processed conversion result in PDF format as bytes
+- `to_latex_pdf_file`: Save the processed conversion result to a PDF file containing LaTeX at a local path
+- `to_latex_pdf_bytes`: Get the processed conversion result in PDF format as bytes (with LaTeX)
+- `to_md_zip_file`: Save the processed conversion result to a ZIP file containing markdown output and any embedded images
+- `to_md_zip_bytes`: Get the processed conversion result in ZIPPED markdown format as bytes
+- `to_mmd_zip_file`: Save the processed conversion result to a ZIP file containing Mathpix Markdown output and any embedded images
+- `to_mmd_zip_bytes`: Get the processed conversion result in ZIPPED Mathpix Markdown format as bytes
+- `to_pptx_file`: Save the processed conversion result to a PPTX file
+- `to_pptx_bytes`: Get the processed conversion result in PPTX format as bytes
+- `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images
+- `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes
 
 # Error Handling
 
