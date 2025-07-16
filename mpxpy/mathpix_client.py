@@ -307,7 +307,7 @@ class MathpixClient:
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
-            file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
+            file_batch_id: Optional batch ID to associate this file with.
             webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
             webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
