@@ -214,7 +214,25 @@ pptx_bytes = conversion.to_pptx_bytes() # is of type bytes
 
 ## MathpixClient
 
-The MathpixClient class is used to add authenticate and create requests using the following methods:
+The MathpixClient class is used to add authenticate and create requests.
+
+### Constructor
+
+**Arguments**
+
+- `app_id`: Optional Mathpix application ID. If None, will use environment variable.
+- `app_key`: Optional Mathpix application key. If None, will use environment variable.
+- `api_url`: Optional Mathpix API URL. If None, will use environment variable or default to the production API.
+- `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true.
+- `request_options`: Optional dict of keyword arguments to pass to the requests. Default is None.
+
+### Properties
+
+- `auth`: An Auth instance managing API credentials and endpoints.
+- `improve_mathpix`: Boolean to enable/disable Mathpix retaining user output.
+- `request_options`: Dict of keyword arguments passed to the requests library. Default is None.
+
+### Methods
 
 ### `image_new`
 

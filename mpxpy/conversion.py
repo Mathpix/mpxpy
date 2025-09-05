@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Optional
+from typing import Optional, Dict, Any
 from urllib.parse import urljoin
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
@@ -42,6 +42,7 @@ class Conversion:
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
             convert_to_html_zip: Optional[bool] = False,
+            request_options: Optional[Dict[str, Any]] = None,
     ):
         """Initialize a Conversion instance.
 
@@ -80,6 +81,7 @@ class Conversion:
         self.convert_to_mmd_zip = convert_to_mmd_zip
         self.convert_to_pptx = convert_to_pptx
         self.convert_to_html_zip = convert_to_html_zip
+        self.request_options = request_options or {}
 
     def wait_until_complete(self, timeout: int=60):
         """Wait for the conversion to complete.
@@ -126,7 +128,7 @@ class Conversion:
         """
         logger.info(f"Getting status for conversion {self.conversion_id}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         return response.json()
 
     def save_file(self, path: str, conversion_format: str) -> str:
@@ -147,7 +149,7 @@ class Conversion:
             path = os.path.join(path, filename)
         logger.info(f"Downloading output for Conversion {self.conversion_id} in format {conversion_format} to path {path}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         try:
@@ -177,7 +179,7 @@ class Conversion:
         """
         logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         return response.text
@@ -196,7 +198,7 @@ class Conversion:
         """
         logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         return response.content

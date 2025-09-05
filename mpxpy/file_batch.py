@@ -1,5 +1,5 @@
 import time
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from pydantic import BaseModel
 from urllib.parse import urljoin
 from mpxpy.pdf import Pdf
@@ -30,7 +30,7 @@ class FileBatch:
         auth: An Auth instance with Mathpix credentials.
         file_batch_id: The unique identifier for this file batch.
     """
-    def __init__(self, auth: Auth , file_batch_id: str = None):
+    def __init__(self, auth: Auth , file_batch_id: str = None, request_options: Optional[Dict[str, Any]] = None):
         """Initialize a FileBatch instance.
 
         Args:
@@ -48,6 +48,7 @@ class FileBatch:
         if not self.file_batch_id:
             logger.error("FileBatch requires a File Batch ID")
             raise ValueError("FileBatch requires a File Batch ID")
+        self.request_options = request_options or {}
 
     def file_batch_is_processing(self):
         """Check if the file batch is still being processed.
@@ -58,7 +59,7 @@ class FileBatch:
         """
         logger.info(f"Checking if file batch {self.file_batch_id} is still processing")
         endpoint = urljoin(self.auth.api_url, f'v3/file-batches/{self.file_batch_id}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         response_json = response.json()
         total_files = response_json["total_files"]
         completed_files = response_json["completed_files"]
@@ -76,7 +77,7 @@ class FileBatch:
         """
         logger.info(f"Getting status for file batch {self.file_batch_id}")
         endpoint =  urljoin(self.auth.api_url, f'v3/file-batches/{self.file_batch_id}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         return response.json()
 
     def files(self, cursor: Optional[str] = None) -> FilesResponse:
@@ -95,7 +96,7 @@ class FileBatch:
         endpoint =  urljoin(self.auth.api_url, f'v3/file-batches/{self.file_batch_id}/files')
         if cursor:
             endpoint += f"?cursor={cursor}"
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         response_json = response.json()
         files = [Pdf(pdf_id=file) for file in response_json['results']]
         return FilesResponse(
