@@ -59,6 +59,7 @@ class Pdf:
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
+            request_options: Optional[Dict[str, Any]] = None,
     ):
         """Initialize a PDF instance.
 
@@ -113,6 +114,7 @@ class Pdf:
         self.mathpix_webhook_secret = mathpix_webhook_secret
         self.webhook_payload = webhook_payload
         self.webhook_enabled_events = webhook_enabled_events
+        self.request_options = request_options or {}
 
     def wait_until_complete(self, timeout: int=60, ignore_conversions: bool=False):
         """Wait for the PDF processing and optional conversions to complete.
@@ -189,7 +191,7 @@ class Pdf:
         """
         logger.debug(f"Getting status for PDF {self.pdf_id}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         return response.json()
 
     def pdf_conversion_status(self):
@@ -200,7 +202,7 @@ class Pdf:
         """
         logger.debug(f"Getting conversion status for PDF {self.pdf_id}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.pdf_id}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         return response.json()
 
     def save_file(self, path: str, conversion_format: str) -> str:
@@ -221,7 +223,7 @@ class Pdf:
             path = os.path.join(path, filename)
         logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         try:
@@ -251,7 +253,7 @@ class Pdf:
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         return json.loads(response.text)
@@ -270,7 +272,7 @@ class Pdf:
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         return response.text
@@ -289,7 +291,7 @@ class Pdf:
         """
         logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers)
+        response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
             raise ConversionIncompleteError("Conversion not complete")
         return response.content

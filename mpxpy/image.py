@@ -35,6 +35,7 @@ class Image:
         include_line_data: Optional[bool] = False,
         metadata: Optional[Dict[str, Any]] = None,
         is_async: Optional[bool] = False,
+        request_options: Optional[Dict[str, Any]] = None,
     ):
         """Initialize an Image instance.
 
@@ -72,6 +73,7 @@ class Image:
         self.metadata = metadata
         self.is_async = is_async
         self.result = result
+        self.request_options = request_options or {}
 
     def results(self):
         """Get OCR results.
@@ -88,7 +90,7 @@ class Image:
             return self.result
         try:
             endpoint = urljoin(self.auth.api_url, f'v3/ocr-results?request_id={self.request_id}')
-            response = get(endpoint, headers=self.auth.headers)
+            response = get(endpoint, headers=self.auth.headers, **self.request_options)
             response.raise_for_status()
             response_json = response.json()
             if 'ocr_results' in response_json and len(response_json['ocr_results']) > 0:

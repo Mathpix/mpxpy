@@ -22,7 +22,7 @@ class MathpixClient:
     Attributes:
         auth: An Auth instance managing API credentials and endpoints.
     """
-    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None, improve_mathpix: bool = True):
+    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None, improve_mathpix: bool = True, request_options: dict = None):
         """Initialize a new Mathpix client.
 
         Args:
@@ -30,11 +30,13 @@ class MathpixClient:
             app_key: Optional Mathpix application key. If None, will use environment variable.
             api_url: Optional Mathpix API URL. If None, will use environment variable or default to the production API.
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true.
+            request_options: Optional dict of keyword arguments to pass to the requests library (e.g. {'verify': False} for SSL verification).
         """
         logger.info("Initializing MathpixClient")
         self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url)
         configure_logging()
         self.improve_mathpix = improve_mathpix
+        self.request_options = request_options or {}
         logger.info(f"MathpixClient initialized with API URL: {self.auth.api_url}")
 
     def image_new(
@@ -205,11 +207,11 @@ class MathpixClient:
                 files = {"file": image_file}
                 result = None
                 try:
-                    response = post(endpoint, data=data, files=files, headers=self.auth.headers)
+                    response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
                     response.raise_for_status()
                     result = response.json()
                     request_id = result['request_id']
-                    return Image(auth=self.auth, request_id=request_id, file_path=file_path, improve_mathpix=improve_mathpix, include_line_data=include_line_data, metadata=metadata, result=result, is_async=is_async)
+                    return Image(auth=self.auth, request_id=request_id, file_path=file_path, improve_mathpix=improve_mathpix, include_line_data=include_line_data, metadata=metadata, result=result, is_async=is_async, request_options=self.request_options)
                 except requests.exceptions.RequestException as e:
                     raise ValueError(f"Mathpix image request failed: {e}")
                 except Exception as e:
@@ -220,11 +222,11 @@ class MathpixClient:
             image_options["src"] = url
             result = None
             try:
-                response = post(endpoint, json=image_options, headers=self.auth.headers)
+                response = post(endpoint, json=image_options, headers=self.auth.headers, **self.request_options)
                 response.raise_for_status()
                 result = response.json()
                 request_id = result['request_id']
-                return Image(auth=self.auth, request_id=request_id, url=url, improve_mathpix=improve_mathpix, include_line_data=include_line_data, metadata=metadata, result=result, is_async=is_async)
+                return Image(auth=self.auth, request_id=request_id, url=url, improve_mathpix=improve_mathpix, include_line_data=include_line_data, metadata=metadata, result=result, is_async=is_async, request_options=self.request_options)
             except requests.exceptions.RequestException as e:
                 raise ValueError(f"Mathpix image request failed: {e}")
             except Exception as e:
@@ -433,7 +435,7 @@ class MathpixClient:
             with path.open("rb") as pdf_file:
                 files = {"file": pdf_file}
                 try:
-                    response = post(endpoint, data=data, files=files, headers=self.auth.headers)
+                    response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
                     response.raise_for_status()
                     response_json = response.json()
                     pdf_id = response_json['pdf_id']
@@ -458,6 +460,7 @@ class MathpixClient:
                         mathpix_webhook_secret=mathpix_webhook_secret,
                         webhook_payload=webhook_payload,
                         webhook_enabled_events=webhook_enabled_events,
+                        request_options=self.request_options,
                     )
                 except requests.exceptions.RequestException as e:
                     if response_json:
@@ -467,7 +470,7 @@ class MathpixClient:
             logger.info(f"Creating new PDF: url={url}")
             options["url"] = url
             try:
-                response = post(endpoint, json=options, headers=self.auth.headers)
+                response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
                 response.raise_for_status()
                 response_json = response.json()
                 pdf_id = response_json['pdf_id']
@@ -492,6 +495,7 @@ class MathpixClient:
                         mathpix_webhook_secret=mathpix_webhook_secret,
                         webhook_payload=webhook_payload,
                         webhook_enabled_events=webhook_enabled_events,
+                        request_options=self.request_options,
                     )
             except Exception as e:
                 if response_json:
@@ -511,11 +515,11 @@ class MathpixClient:
         """
         endpoint = urljoin(self.auth.api_url, 'v3/file-batches')
         try:
-            response = post(endpoint, headers=self.auth.headers)
+            response = post(endpoint, headers=self.auth.headers, **self.request_options)
             response.raise_for_status()
             response_json = response.json()
             file_batch_id = response_json['file_batch_id']
-            return FileBatch(auth=self.auth, file_batch_id=file_batch_id)
+            return FileBatch(auth=self.auth, file_batch_id=file_batch_id, request_options=self.request_options)
         except requests.exceptions.RequestException as e:
             logger.error(f"File batch creation failed: {e}")
             raise MathpixClientError(f"Mathpix request failed: {e}")
@@ -605,6 +609,7 @@ class MathpixClient:
                 convert_to_mmd_zip=convert_to_mmd_zip,
                 convert_to_pptx=convert_to_pptx,
                 convert_to_html_zip=convert_to_html_zip,
+                request_options=self.request_options,
             )
         except Exception as e:
             if response_json:
