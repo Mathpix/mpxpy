@@ -15,7 +15,7 @@ def client():
     return MathpixClient()
 
 
-def test_pdf_convert_remote_file(client):
+def test_pdf_convert_remote_file(client: MathpixClient):
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf = client.pdf_new(
         url=pdf_file_url
@@ -25,7 +25,7 @@ def test_pdf_convert_remote_file(client):
     status = pdf.pdf_status()
     assert status['status'] == 'completed'
 
-def test_pdf_convert_remote_file_to_docx(client):
+def test_pdf_convert_remote_file_to_docx(client: MathpixClient):
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf = client.pdf_new(
         url=pdf_file_url,
@@ -37,7 +37,7 @@ def test_pdf_convert_remote_file_to_docx(client):
     assert status['status'] == 'completed'
 
 
-def test_pdf_convert_local_file(client):
+def test_pdf_convert_local_file(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -50,7 +50,7 @@ def test_pdf_convert_local_file(client):
     assert status['status'] == 'completed'
 
 
-def test_pdf_save_md_to_local_path(client):
+def test_pdf_save_md_to_local_path(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/the-internet-tidal-wave.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -72,7 +72,7 @@ def test_pdf_save_md_to_local_path(client):
             shutil.rmtree(output_dir)
 
 
-def test_pdf_get_result_md_text(client):
+def test_pdf_get_result_md_text(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/theres-plenty-of-room-at-the-bottom.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -85,7 +85,7 @@ def test_pdf_get_result_md_text(client):
     assert md_output is not None
     assert isinstance(md_output, str), f"Expected md output to be a string, got {type(md_output)}"
 
-def test_pdf_get_result_lines_json(client):
+def test_pdf_get_result_lines_json(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -97,7 +97,7 @@ def test_pdf_get_result_lines_json(client):
     assert lines_json is not None
     assert isinstance(lines_json, Dict), f"Expected lines.json output to be a dict, got {type(lines_json)}"
 
-def test_pdf_get_result_docx(client):
+def test_pdf_get_result_docx(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -111,29 +111,37 @@ def test_pdf_get_result_docx(client):
     assert isinstance(docx_bytes, bytes), f"Expected docx output to be of type bytes, got {type(docx_bytes)}"
 
 
-def test_pdf_download_output_incomplete_conversion(client):
+def test_pdf_download_output_without_explicit_wait(client: MathpixClient):
+    """Test that requesting output without explicit wait_until_complete() still works.
+
+    The API now waits for conversion to complete before returning the result,
+    so we don't need to explicitly poll for completion.
+    """
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf = client.pdf_new(
         url=pdf_file_url,
         convert_to_md=True
     )
-    with pytest.raises(ConversionIncompleteError):
-        pdf.to_md_text()
+    # API should wait for conversion and return result (no explicit wait needed)
+    md_output = pdf.to_md_text()
+    assert md_output is not None
+    assert isinstance(md_output, str), f"Expected md output to be a string, got {type(md_output)}"
+    assert len(md_output) > 0, "Expected non-empty markdown output"
 
-def test_invalid_pdf_arguments(client):
+def test_invalid_pdf_arguments(client: MathpixClient):
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf_file_path = os.path.join(current_dir, "files/pdfs/theres-plenty-of-room-at-the-bottom.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     with pytest.raises(ValidationError):
         client.pdf_new(file_path=pdf_file_path, url=pdf_file_url)
 
-def test_bad_pdf_path(client):
+def test_bad_pdf_path(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/nonexistent.pdf")
     with pytest.raises(FileNotFoundError):
         client.pdf_new(file_path=pdf_file_path)
 
 
-def test_pdf_get_result_md_zip(client):
+def test_pdf_get_result_md_zip(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -148,7 +156,7 @@ def test_pdf_get_result_md_zip(client):
     assert md_zip_bytes.startswith(b'PK'), "Expected md.zip to be a valid ZIP file"
 
 
-def test_pdf_save_md_zip_to_local_path(client):
+def test_pdf_save_md_zip_to_local_path(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -169,7 +177,7 @@ def test_pdf_save_md_zip_to_local_path(client):
             shutil.rmtree(output_dir)
 
 
-def test_pdf_get_result_mmd_zip(client):
+def test_pdf_get_result_mmd_zip(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -184,7 +192,7 @@ def test_pdf_get_result_mmd_zip(client):
     assert mmd_zip_bytes.startswith(b'PK'), "Expected mmd.zip to be a valid ZIP file"
 
 
-def test_pdf_save_mmd_zip_to_local_path(client):
+def test_pdf_save_mmd_zip_to_local_path(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -205,7 +213,7 @@ def test_pdf_save_mmd_zip_to_local_path(client):
             shutil.rmtree(output_dir)
 
 
-def test_pdf_get_result_pptx(client):
+def test_pdf_get_result_pptx(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -220,7 +228,7 @@ def test_pdf_get_result_pptx(client):
     assert pptx_bytes.startswith(b'PK'), "Expected pptx to be a valid ZIP-based file"
 
 
-def test_pdf_save_pptx_to_local_path(client):
+def test_pdf_save_pptx_to_local_path(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -240,7 +248,7 @@ def test_pdf_save_pptx_to_local_path(client):
         if os.path.exists(output_dir) and os.path.isdir(output_dir):
             shutil.rmtree(output_dir)
 
-def test_pdf_get_result_html_zip(client):
+def test_pdf_get_result_html_zip(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(
@@ -255,7 +263,7 @@ def test_pdf_get_result_html_zip(client):
     assert html_zip_bytes.startswith(b'PK'), "Expected html_zip to be a valid ZIP-based file"
 
 
-def test_pdf_save_html_zip_to_local_path(client):
+def test_pdf_save_html_zip_to_local_path(client: MathpixClient):
     pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
     assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
     pdf = client.pdf_new(

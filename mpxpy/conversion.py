@@ -99,7 +99,7 @@ class Conversion:
         """
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValidationError("Timeout must be a positive, non-zero integer")
-        logger.info(f"Waiting for conversion {self.conversion_id} to complete (timeout: {timeout}s)")
+        logger.debug(f"Waiting for conversion {self.conversion_id} to complete (timeout: {timeout}s)")
         attempt = 1
         completed = False
         while attempt < timeout and not completed:
@@ -110,14 +110,14 @@ class Conversion:
                     for _, format_data in conversion_status['conversion_status'].items()
             )):
                 completed = True
-                logger.info(f"Conversion {self.conversion_id} completed successfully")
+                logger.debug(f"Conversion {self.conversion_id} completed successfully")
                 break
             elif conversion_status['status'] == 'error':
                 break
             time.sleep(1)
             attempt += 1
         if not completed:
-            logger.debug(f"Conversion {self.conversion_id} did not complete within timeout period ({timeout}s)")
+            logger.warning(f"Conversion {self.conversion_id} did not complete within timeout period ({timeout}s)")
         return completed
 
     def conversion_status(self):
@@ -126,7 +126,7 @@ class Conversion:
         Returns:
             dict: JSON response containing conversion status information.
         """
-        logger.info(f"Getting status for conversion {self.conversion_id}")
+        logger.debug(f"Getting status for conversion {self.conversion_id}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         return response.json()
@@ -147,7 +147,7 @@ class Conversion:
         if path.endswith('/') or path.endswith('\\'):
             filename = f"{self.conversion_id}.{conversion_format}"
             path = os.path.join(path, filename)
-        logger.info(f"Downloading output for Conversion {self.conversion_id} in format {conversion_format} to path {path}")
+        logger.debug(f"Downloading output for Conversion {self.conversion_id} in format {conversion_format} to path {path}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
@@ -162,7 +162,7 @@ class Conversion:
                         f.write(chunk)
         except Exception:
             raise FilesystemError('Failed to save file to system')
-        logger.info(f"File saved successfully to {path}")
+        logger.debug(f"File saved successfully to {path}")
         return path
 
     def text_result(self, conversion_format: str) -> str:
@@ -177,7 +177,7 @@ class Conversion:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
-        logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
+        logger.debug(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
@@ -196,7 +196,7 @@ class Conversion:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
-        logger.info(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
+        logger.debug(f"Downloading output for conversion {self.conversion_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/converter/{self.conversion_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:

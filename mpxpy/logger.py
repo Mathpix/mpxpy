@@ -9,11 +9,11 @@ def configure_logging(level=None):
 
     Args:
         level: Optional logging level (e.g., logging.INFO, logging.DEBUG).
-              If None, uses LOG_LEVEL environment variable or defaults to INFO.
+              If None, uses MATHPIX_LOG_LEVEL environment variable or defaults to WARNING.
     """
     if level is None:
-        level_name = os.getenv("MATHPIX_LOG_LEVEL", "INFO")
-        level = getattr(logging, level_name, logging.INFO)
+        level_name = os.getenv("MATHPIX_LOG_LEVEL", "WARNING")
+        level = getattr(logging, level_name, logging.WARNING)
     logger.setLevel(level)
     if not logger.handlers:
         handler = logging.StreamHandler()
