@@ -2,6 +2,7 @@ import os
 import pathlib
 import urllib.parse
 from dotenv import load_dotenv
+from typing import Optional
 from mpxpy.logger import logger
 from mpxpy.errors import AuthenticationError, ValidationError
 
@@ -17,9 +18,16 @@ class Auth:
         app_id: The Mathpix application ID used for authentication.
         app_key: The Mathpix application key used for authentication.
         api_url: The base URL for the Mathpix API.
+        files_api_url: The base URL for files-api v1 endpoints (internal, defaults to api_url).
         headers: Dictionary of HTTP headers to use for API requests.
     """
-    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None):
+    def __init__(
+        self,
+        app_id: Optional[str] = None,
+        app_key: Optional[str] = None,
+        api_url: Optional[str] = None,
+        files_api_url: Optional[str] = None
+    ):
         """Initialize authentication configuration.
 
         Loads authentication credentials from provided arguments or environment
@@ -33,6 +41,8 @@ class Auth:
                 MATHPIX_APP_KEY environment variable.
             api_url: Optional Mathpix API URL. If None, will use the
                 MATHPIX_URL environment variable or default to 'https://api.mathpix.com'.
+            files_api_url: Optional files-api URL for internal testing only.
+                If None, defaults to api_url. Users should not need to set this.
 
         Raises:
             AuthenticationError: If app_id or app_key cannot be resolved from arguments
@@ -50,6 +60,8 @@ class Auth:
             logger.error("Client requires an App Key")
             raise AuthenticationError("Mathpix App Key is required")
         self.api_url = self._validate_api_url(raw_api_url)
+        # files_api_url is internal-only for testing. Defaults to api_url.
+        self.files_api_url = self._validate_api_url(files_api_url) if files_api_url else self.api_url
         self.headers = {
             'app_id': self.app_id,
             'app_key': self.app_key,

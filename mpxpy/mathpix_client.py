@@ -7,10 +7,12 @@ from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
+from mpxpy.files_api import FilesApiFile
+from mpxpy.scs_job import ScsJob
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError
-from mpxpy.request_handler import post
+from mpxpy.request_handler import post, get
 
 
 class MathpixClient:
@@ -22,18 +24,19 @@ class MathpixClient:
     Attributes:
         auth: An Auth instance managing API credentials and endpoints.
     """
-    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None, improve_mathpix: bool = True, request_options: dict = None):
+    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None, files_api_url: str = None, improve_mathpix: bool = True, request_options: dict = None):
         """Initialize a new Mathpix client.
 
         Args:
             app_id: Optional Mathpix application ID. If None, will use environment variable.
             app_key: Optional Mathpix application key. If None, will use environment variable.
             api_url: Optional Mathpix API URL. If None, will use environment variable or default to the production API.
+            files_api_url: Optional files-api URL for internal testing. If None, defaults to api_url.
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true.
             request_options: Optional dict of keyword arguments to pass to the requests library (e.g. {'verify': False} for SSL verification).
         """
         logger.debug("Initializing MathpixClient")
-        self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url)
+        self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url, files_api_url=files_api_url)
         configure_logging()
         self.improve_mathpix = improve_mathpix
         self.request_options = request_options or {}
@@ -615,3 +618,261 @@ class MathpixClient:
             if response_json:
                 logger.error(f"Conversion failed: {response_json}")
             raise MathpixClientError(f"Mathpix conversion request failed: {e}")
+
+    def file_new(
+            self,
+            file_path: Optional[str] = None,
+            url: Optional[str] = None,
+            s3_uri: Optional[str] = None,
+            filename: Optional[str] = None,
+            scs_job_id: Optional[str] = None,
+            conversion_formats: Optional[Dict[str, bool]] = None,
+            conversion_options: Optional[Dict[str, Any]] = None,
+            destination_s3_uri: Optional[str] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            alphabets_allowed: Optional[Dict[str, str]] = None,
+            rm_spaces: Optional[bool] = True,
+            rm_fonts: Optional[bool] = False,
+            idiomatic_eqn_arrays: Optional[bool] = False,
+            include_equation_tags: Optional[bool] = False,
+            include_smiles: Optional[bool] = True,
+            include_chemistry_as_image: Optional[bool] = False,
+            include_diagram_text: Optional[bool] = False,
+            numbers_default_to_math: Optional[bool] = False,
+            math_inline_delimiters: Optional[Tuple[str, str]] = None,
+            math_display_delimiters: Optional[Tuple[str, str]] = None,
+            page_ranges: Optional[str] = None,
+            enable_spell_check: Optional[bool] = False,
+            auto_number_sections: Optional[bool] = False,
+            remove_section_numbering: Optional[bool] = False,
+            preserve_section_numbering: Optional[bool] = True,
+            enable_tables_fallback: Optional[bool] = False,
+            fullwidth_punctuation: Optional[bool] = None,
+    ) -> FilesApiFile:
+        """Upload a file via files-api v1 for async processing.
+
+        Supports three upload modes (exactly one must be provided):
+        - file_path: Multipart upload from local file
+        - url: Upload from HTTP URL or S3 presigned URL
+        - s3_uri: Copy from S3 bucket (requires IAM role access)
+
+        Args:
+            file_path: Path to a local file to upload.
+            url: URL of a remote file (HTTP/HTTPS or S3 presigned URL).
+            s3_uri: S3 URI (s3://bucket/key) to copy from.
+            filename: Optional filename to use (defaults to file basename).
+            scs_job_id: Optional job ID to group files together.
+            conversion_formats: Dict of format names to enable (e.g., {'mmd': True, 'docx': True}).
+            conversion_options: Additional conversion options dict.
+            destination_s3_uri: Optional S3 URI to write output files.
+            metadata: Optional dict to attach metadata to the request.
+            alphabets_allowed: Optional dict to list alphabets allowed in the output.
+            rm_spaces: Remove extra white space from equations (default True).
+            rm_fonts: Remove font commands from equations (default False).
+            idiomatic_eqn_arrays: Use aligned/gathered/cases instead of array (default False).
+            include_equation_tags: Include equation number tags in LaTeX (default False).
+            include_smiles: Enable chemistry diagram OCR via SMILES (default True).
+            include_chemistry_as_image: Return image crop for chemical diagrams (default False).
+            include_diagram_text: Enable text extraction from diagrams (default False).
+            numbers_default_to_math: Numbers are always math (default False).
+            math_inline_delimiters: Tuple of (begin, end) delimiters for inline math.
+            math_display_delimiters: Tuple of (begin, end) delimiters for display math.
+            page_ranges: Page range string (e.g., "2,4-6" or "2--2").
+            enable_spell_check: Enable predictive mode for English handwriting (default False).
+            auto_number_sections: Auto-number sections (default False).
+            remove_section_numbering: Remove existing section numbering (default False).
+            preserve_section_numbering: Keep existing section numbering (default True).
+            enable_tables_fallback: Enable advanced table processing (default False).
+            fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
+
+        Returns:
+            FilesApiFile: A new FilesApiFile instance for tracking processing status.
+
+        Raises:
+            ValidationError: If not exactly one of file_path, url, or s3_uri is provided.
+            FileNotFoundError: If the specified file_path does not exist.
+            MathpixClientError: If the API request fails.
+        """
+        source_count = sum(x is not None for x in [file_path, url, s3_uri])
+        if source_count != 1:
+            logger.error("Invalid parameters: Exactly one of file_path, url, or s3_uri must be provided")
+            raise ValidationError("Exactly one of file_path, url, or s3_uri must be provided")
+        options: Dict[str, object] = {
+            "conversion_formats": conversion_formats or {},
+            "metadata": {
+                "mpxpy": True,
+                **(metadata or {})
+            },
+        }
+        if scs_job_id:
+            options["scs_job_id"] = scs_job_id
+        if destination_s3_uri:
+            options["destination_s3_uri"] = destination_s3_uri
+        if alphabets_allowed is not None:
+            options["alphabets_allowed"] = alphabets_allowed
+        if not rm_spaces:
+            options["rm_spaces"] = rm_spaces
+        if rm_fonts:
+            options["rm_fonts"] = rm_fonts
+        if idiomatic_eqn_arrays:
+            options["idiomatic_eqn_arrays"] = idiomatic_eqn_arrays
+        if include_equation_tags:
+            options["include_equation_tags"] = True
+        if not include_smiles:
+            options["include_smiles"] = include_smiles
+        if include_chemistry_as_image:
+            options["include_chemistry_as_image"] = True
+        if include_diagram_text:
+            options["include_diagram_text"] = include_diagram_text
+        if numbers_default_to_math:
+            options["numbers_default_to_math"] = numbers_default_to_math
+        if math_inline_delimiters is not None:
+            options["math_inline_delimiters"] = math_inline_delimiters
+        if math_display_delimiters is not None:
+            options["math_display_delimiters"] = math_display_delimiters
+        if page_ranges is not None:
+            options["page_ranges"] = page_ranges
+        if enable_spell_check:
+            options["enable_spell_check"] = enable_spell_check
+        if auto_number_sections:
+            options["auto_number_sections"] = auto_number_sections
+        if remove_section_numbering:
+            options["remove_section_numbering"] = remove_section_numbering
+        if not preserve_section_numbering:
+            options["preserve_section_numbering"] = preserve_section_numbering
+        if enable_tables_fallback:
+            options["enable_tables_fallback"] = enable_tables_fallback
+        if fullwidth_punctuation:
+            options["fullwidth_punctuation"] = fullwidth_punctuation
+        if conversion_options:
+            options.update(conversion_options)
+        if file_path:
+            logger.debug(f"Creating new file via files-api: path={file_path}")
+            path = Path(file_path)
+            if not path.is_file():
+                logger.error(f"File not found: {file_path}")
+                raise FileNotFoundError(f"File path not found: {file_path}")
+            endpoint = urljoin(self.auth.files_api_url, '/files/v1')
+            data = {"options_json": json.dumps(options)}
+            if filename:
+                data["filename"] = filename
+            with path.open("rb") as f:
+                files = {"file": f}
+                try:
+                    response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
+                    response.raise_for_status()
+                    response_json = response.json()
+                    file_id = response_json['file_id']
+                    logger.debug(f"File upload started, file_id: {file_id}")
+                    return FilesApiFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+                except requests.exceptions.RequestException as e:
+                    raise MathpixClientError(f"Mathpix files-api request failed: {e}")
+        elif url:
+            logger.debug(f"Creating new file via files-api: url={url}")
+            endpoint = urljoin(self.auth.files_api_url, '/files/v1/url')
+            options["url"] = url
+            if filename:
+                options["filename"] = filename
+            try:
+                response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
+                response.raise_for_status()
+                response_json = response.json()
+                file_id = response_json['file_id']
+                logger.debug(f"File from URL started, file_id: {file_id}")
+                return FilesApiFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+            except requests.exceptions.RequestException as e:
+                raise MathpixClientError(f"Mathpix files-api request failed: {e}")
+        else:
+            logger.debug(f"Creating new file via files-api: s3_uri={s3_uri}")
+            endpoint = urljoin(self.auth.files_api_url, '/files/v1/s3')
+            options["s3_uri"] = s3_uri
+            if filename:
+                options["filename"] = filename
+            try:
+                response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
+                response.raise_for_status()
+                response_json = response.json()
+                file_id = response_json['file_id']
+                logger.debug(f"File from S3 started, file_id: {file_id}")
+                return FilesApiFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+            except requests.exceptions.RequestException as e:
+                raise MathpixClientError(f"Mathpix files-api request failed: {e}")
+
+    def list_files(
+            self,
+            scs_job_id: Optional[str] = None,
+            filename: Optional[str] = None,
+            limit: int = 100,
+            paging_state: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List files from files-api v1.
+
+        Args:
+            scs_job_id: Optional job ID to filter by.
+            filename: Optional filename to filter by.
+            limit: Maximum number of results (default 100).
+            paging_state: Optional paging state for pagination.
+
+        Returns:
+            dict: Response containing 'files' list and optionally 'paging_state' for next page.
+        """
+        logger.debug("Listing files from files-api")
+        endpoint = urljoin(self.auth.files_api_url, '/files/v1/list')
+        params = {"limit": limit}
+        if scs_job_id:
+            params["scs_job_id"] = scs_job_id
+        if filename:
+            params["filename"] = filename
+        if paging_state:
+            params["paging_state"] = paging_state
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api list request failed: {e}")
+
+    def list_jobs(
+            self,
+            start: Optional[str] = None,
+            end: Optional[str] = None,
+            limit: int = 100,
+            paging_state: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List SCS jobs from files-api v1.
+
+        Args:
+            start: Optional start date filter (ISO format).
+            end: Optional end date filter (ISO format).
+            limit: Maximum number of results (default 100).
+            paging_state: Optional paging state for pagination.
+
+        Returns:
+            dict: Response containing 'jobs' list and optionally 'paging_state' for next page.
+        """
+        logger.debug("Listing jobs from files-api")
+        endpoint = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs')
+        params = {"limit": limit}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if paging_state:
+            params["paging_state"] = paging_state
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api list jobs request failed: {e}")
+
+    def job_status(self, scs_job_id: str) -> ScsJob:
+        """Get an ScsJob instance for tracking job status.
+
+        Args:
+            scs_job_id: The job ID to track.
+
+        Returns:
+            ScsJob: An ScsJob instance for the given job ID.
+        """
+        return ScsJob(auth=self.auth, scs_job_id=scs_job_id, request_options=self.request_options)
