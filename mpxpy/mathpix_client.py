@@ -32,12 +32,12 @@ class MathpixClient:
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true.
             request_options: Optional dict of keyword arguments to pass to the requests library (e.g. {'verify': False} for SSL verification).
         """
-        logger.info("Initializing MathpixClient")
+        logger.debug("Initializing MathpixClient")
         self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url)
         configure_logging()
         self.improve_mathpix = improve_mathpix
         self.request_options = request_options or {}
-        logger.info(f"MathpixClient initialized with API URL: {self.auth.api_url}")
+        logger.debug(f"MathpixClient initialized with API URL: {self.auth.api_url}")
 
     def image_new(
             self,
@@ -191,7 +191,7 @@ class MathpixClient:
         if fullwidth_punctuation:
             image_options["fullwidth_punctuation"] = fullwidth_punctuation
         if not self.improve_mathpix:
-            logger.info('improve_mathpix set to False on the client')
+            logger.debug('improve_mathpix set to False on the client')
             image_options["metadata"]["improve_mathpix"] = False
         elif not improve_mathpix:
             image_options["metadata"]["improve_mathpix"] = False
@@ -342,7 +342,7 @@ class MathpixClient:
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
         if not self.improve_mathpix:
-            logger.info('improve_mathpix set to False on the client')
+            logger.debug('improve_mathpix set to False on the client')
             improve_mathpix = False
         elif not improve_mathpix:
             improve_mathpix = False
@@ -427,7 +427,7 @@ class MathpixClient:
             "options_json": json.dumps(options)
         }
         if file_path:
-            logger.info(f"Creating new PDF: path={file_path}")
+            logger.debug(f"Creating new PDF: path={file_path}")
             path = Path(file_path)
             if not path.is_file():
                 logger.error(f"File not found: {file_path}")
@@ -439,7 +439,7 @@ class MathpixClient:
                     response.raise_for_status()
                     response_json = response.json()
                     pdf_id = response_json['pdf_id']
-                    logger.info(f"PDF from local path processing started, PDF ID: {pdf_id}")
+                    logger.debug(f"PDF from local path processing started, PDF ID: {pdf_id}")
                     return Pdf(
                         auth=self.auth,
                         pdf_id=pdf_id,
@@ -464,17 +464,17 @@ class MathpixClient:
                     )
                 except requests.exceptions.RequestException as e:
                     if response_json:
-                        logger.info(f"PDF upload failed: {response_json}")
+                        logger.error(f"PDF upload failed: {response_json}")
                     raise MathpixClientError(f"Mathpix PDF request failed: {e}")
         else:
-            logger.info(f"Creating new PDF: url={url}")
+            logger.debug(f"Creating new PDF: url={url}")
             options["url"] = url
             try:
                 response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
                 response.raise_for_status()
                 response_json = response.json()
                 pdf_id = response_json['pdf_id']
-                logger.info(f"PDF from URL processing started, PDF ID: {pdf_id}")
+                logger.debug(f"PDF from URL processing started, PDF ID: {pdf_id}")
                 return Pdf(
                         auth=self.auth,
                         pdf_id=pdf_id,
@@ -499,7 +499,7 @@ class MathpixClient:
                     )
             except Exception as e:
                 if response_json:
-                    logger.info(f"PDF upload failed: {response_json}")
+                    logger.error(f"PDF upload failed: {response_json}")
                 raise MathpixClientError(f"Mathpix PDF request failed: {e}")
 
     def file_batch_new(self):
@@ -559,7 +559,7 @@ class MathpixClient:
         Raises:
             MathpixClientError: If the API request fails.
         """
-        logger.info(f"Starting new MMD conversions to")
+        logger.debug("Starting new MMD conversion")
         endpoint = urljoin(self.auth.api_url, 'v3/converter')
         options = {
             "mmd": mmd,
@@ -595,7 +595,7 @@ class MathpixClient:
                 logger.error(f"Conversion failed: {response_json}")
                 raise MathpixClientError(f"Conversion failed: {response_json}")
             conversion_id = response_json['conversion_id']
-            logger.info(f"Conversion created, ID: {conversion_id}")
+            logger.debug(f"Conversion created, ID: {conversion_id}")
             return Conversion(
                 auth=self.auth,
                 conversion_id=conversion_id,
@@ -613,5 +613,5 @@ class MathpixClient:
             )
         except Exception as e:
             if response_json:
-                logger.info(f"PDF upload failed: {response_json}")
-            raise MathpixClientError(f"Mathpix PDF request failed: {e}")
+                logger.error(f"Conversion failed: {response_json}")
+            raise MathpixClientError(f"Mathpix conversion request failed: {e}")

@@ -13,6 +13,7 @@ requires-python = ">=3.8"
 authors = [
   { name="Nico Jimenez", email="nicodjimenez@mathpix.com" },
   { name="Matt Chang", email="mattchang@mathpix.com" },
+  { name="Sangyub Lee", email="sangyub@mathpix.com" },
 ]
 license = { file="LICENSE.txt" }
 classifiers = [

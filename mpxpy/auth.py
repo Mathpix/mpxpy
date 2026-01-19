@@ -77,12 +77,12 @@ class Auth:
         for config_path in config_locations:
             if config_path.exists():
                 try:
-                    logger.info(f"Loading config from {config_path}")
+                    logger.debug(f"Loading config from {config_path}")
                     load_dotenv(config_path)
                     return True
                 except Exception as e:
                     logger.warning(f"Error loading config from {config_path}: {str(e)}")
-        logger.info("No config files found")
+        logger.debug("No config files found")
         return False
 
     def _validate_api_url(self, url: str) -> str:

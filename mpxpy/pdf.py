@@ -132,7 +132,7 @@ class Pdf:
         """
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValueError("Timeout must be a positive, non-zero integer")
-        logger.info(f"Waiting for PDF {self.pdf_id} to complete (timeout: {timeout}s, ignore_conversions: {ignore_conversions})")
+        logger.debug(f"Waiting for PDF {self.pdf_id} to complete (timeout: {timeout}s, ignore_conversions: {ignore_conversions})")
         attempt = 1
         pdf_completed = False
         conversion_completed = False
@@ -142,7 +142,7 @@ class Pdf:
                 logger.debug(f"PDF status check attempt {attempt}/{timeout}: {status}")
                 if isinstance(status, dict) and 'status' in status and status['status'] == 'completed':
                     pdf_completed = True
-                    logger.info(f"PDF {self.pdf_id} processing completed")
+                    logger.debug(f"PDF {self.pdf_id} processing completed")
                     break
                 elif isinstance(status, dict) and 'error' in status:
                     logger.error(f"Error in PDF {self.pdf_id} processing: {status.get('error')}")
@@ -154,7 +154,7 @@ class Pdf:
             time.sleep(1)
         automatic_conversion_requested = self.convert_to_docx or self.convert_to_md or self.convert_to_mmd or self.convert_to_tex_zip or self.convert_to_html or self.convert_to_pdf
         if pdf_completed and automatic_conversion_requested and not ignore_conversions:
-            logger.info(f"Checking conversion status for PDF {self.pdf_id}")
+            logger.debug(f"Checking conversion status for PDF {self.pdf_id}")
             while attempt < timeout and not conversion_completed:
                 try:
                     conv_status = self.pdf_conversion_status()
@@ -170,7 +170,7 @@ class Pdf:
                         'conversion_status' in conv_status and
                         all(format_data['status'] == 'completed'
                             for _, format_data in conv_status['conversion_status'].items())):
-                        logger.info(f"All conversions completed for PDF {self.pdf_id}")
+                        logger.debug(f"All conversions completed for PDF {self.pdf_id}")
                         conversion_completed = True
                         break
                     else:
@@ -180,7 +180,7 @@ class Pdf:
                 attempt += 1
                 time.sleep(1)
         result = pdf_completed and (conversion_completed or ignore_conversions or not automatic_conversion_requested)
-        logger.info(f"Wait completed for PDF {self.pdf_id}, result: {result}")
+        logger.debug(f"Wait completed for PDF {self.pdf_id}, result: {result}")
         return result
 
     def pdf_status(self):
@@ -221,7 +221,7 @@ class Pdf:
         if path.endswith('/') or path.endswith('\\'):
             filename = f"{self.pdf_id}.{conversion_format}"
             path = os.path.join(path, filename)
-        logger.info(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
+        logger.debug(f"Downloading output for PDF {self.pdf_id} in format {conversion_format} to path {path}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
@@ -236,7 +236,7 @@ class Pdf:
                         f.write(chunk)
         except Exception:
             raise FilesystemError('Failed to save file to system')
-        logger.info(f"File saved successfully to {path}")
+        logger.debug(f"File saved successfully to {path}")
         return path
 
     def json_result(self, conversion_format: str) -> Dict:
@@ -251,7 +251,7 @@ class Pdf:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
-        logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
+        logger.debug(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
@@ -270,7 +270,7 @@ class Pdf:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
-        logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
+        logger.debug(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
@@ -289,7 +289,7 @@ class Pdf:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
-        logger.info(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
+        logger.debug(f"Downloading output for PDF {self.pdf_id} in format: {conversion_format}")
         endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}.{conversion_format}')
         response = get(endpoint, headers=self.auth.headers, **self.request_options)
         if response.status_code == 404:
