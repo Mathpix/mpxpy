@@ -777,9 +777,11 @@ class MathpixClient:
                 raise FileNotFoundError(f"File path not found: {file_path}")
             endpoint = urljoin(self.auth.files_api_url, '/files/v1')
             data = {"options_json": json.dumps(options)}
-            # For files/v1, filename is a form field (not in options_json)
+            # For files/v1 multipart, filename and scs_job_id are form fields (not in options_json)
             if filename:
                 data["filename"] = filename
+            if scs_job_id:
+                data["scs_job_id"] = scs_job_id
             with path.open("rb") as f:
                 files = {"file": f}
                 try:
@@ -828,21 +830,23 @@ class MathpixClient:
             filename: Optional[str] = None,
             limit: int = 100,
             paging_state: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ):
         """List files from files-api v1.
 
+        Requires exactly one filter: scs_job_id or filename.
+
         Args:
-            scs_job_id: Optional job ID to filter by.
-            filename: Optional filename to filter by.
+            scs_job_id: Filter by job ID.
+            filename: Filter by filename.
             limit: Maximum number of results (default 100).
             paging_state: Optional paging state for pagination.
 
         Returns:
-            dict: Response containing 'files' list and optionally 'paging_state' for next page.
+            dict: Response containing 'file_ids' list and 'next_page_token' for pagination.
         """
         logger.debug("Listing files from files-api")
         endpoint = urljoin(self.auth.files_api_url, '/files/v1/list')
-        params = {"limit": limit}
+        params: Dict[str, object] = {"limit": limit}
         if scs_job_id:
             params["scs_job_id"] = scs_job_id
         if filename:
@@ -862,7 +866,7 @@ class MathpixClient:
             end: Optional[str] = None,
             limit: int = 100,
             paging_state: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ):
         """List SCS jobs from files-api v1.
 
         Args:
@@ -876,7 +880,7 @@ class MathpixClient:
         """
         logger.debug("Listing jobs from files-api")
         endpoint = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs')
-        params = {"limit": limit}
+        params: Dict[str, object] = {"limit": limit}
         if start:
             params["start"] = start
         if end:

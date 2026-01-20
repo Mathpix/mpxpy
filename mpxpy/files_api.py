@@ -77,6 +77,40 @@ class FilesApiFile:
         logger.warning(f"File {self.file_id} did not complete within timeout period ({timeout}s)")
         return False
 
+    def wait_for_format(self, format: str, timeout: int = 60) -> bool:
+        """Wait for a specific format conversion to complete.
+
+        Polls the file status until the format is complete or the timeout is reached.
+
+        Args:
+            format: The format to wait for (e.g., 'md', 'docx', 'tex.zip').
+            timeout: Maximum number of seconds to wait. Must be a positive, non-zero integer.
+
+        Returns:
+            bool: True if format conversion completed successfully, False if it timed out or errored.
+
+        Raises:
+            ValidationError: If timeout is an invalid value
+        """
+        if not isinstance(timeout, int) or timeout <= 0:
+            raise ValidationError("Timeout must be a positive, non-zero integer")
+        logger.debug(f"Waiting for file {self.file_id} format '{format}' to complete (timeout: {timeout}s)")
+        attempt = 1
+        while attempt < timeout:
+            logger.debug(f'Checking format status... ({attempt}/{timeout})')
+            file_status = self.status()
+            format_status = file_status.get('formats', {}).get(format)
+            if format_status == 'completed':
+                logger.debug(f"File {self.file_id} format '{format}' completed successfully")
+                return True
+            elif format_status == 'error':
+                logger.error(f"File {self.file_id} format '{format}' failed")
+                return False
+            time.sleep(1)
+            attempt += 1
+        logger.warning(f"File {self.file_id} format '{format}' did not complete within timeout period ({timeout}s)")
+        return False
+
     def status(self) -> Dict[str, Any]:
         """Get the current status of the file processing.
 
