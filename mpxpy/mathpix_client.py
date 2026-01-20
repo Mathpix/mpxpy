@@ -24,7 +24,15 @@ class MathpixClient:
     Attributes:
         auth: An Auth instance managing API credentials and endpoints.
     """
-    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None, files_api_url: str = None, improve_mathpix: bool = True, request_options: dict = None):
+    def __init__(
+        self,
+        app_id: Optional[str] = None,
+        app_key: Optional[str] = None,
+        api_url: Optional[str] = None,
+        files_api_url: Optional[str] = None,
+        improve_mathpix: bool = True,
+        request_options: Optional[Dict[str, Any]] = None
+    ):
         """Initialize a new Mathpix client.
 
         Args:
@@ -623,12 +631,16 @@ class MathpixClient:
             self,
             file_path: Optional[str] = None,
             url: Optional[str] = None,
-            s3_uri: Optional[str] = None,
+            source_s3_uri: Optional[str] = None,
             filename: Optional[str] = None,
             scs_job_id: Optional[str] = None,
             conversion_formats: Optional[Dict[str, bool]] = None,
             conversion_options: Optional[Dict[str, Any]] = None,
             destination_s3_uri: Optional[str] = None,
+            destination_basename: Optional[str] = None,
+            s3_region: Optional[str] = None,
+            image_output_mode: Optional[str] = None,
+            include_page_info: Optional[bool] = None,
             metadata: Optional[Dict[str, Any]] = None,
             alphabets_allowed: Optional[Dict[str, str]] = None,
             rm_spaces: Optional[bool] = True,
@@ -654,17 +666,21 @@ class MathpixClient:
         Supports three upload modes (exactly one must be provided):
         - file_path: Multipart upload from local file
         - url: Upload from HTTP URL or S3 presigned URL
-        - s3_uri: Copy from S3 bucket (requires IAM role access)
+        - source_s3_uri: Copy from S3 bucket (requires IAM role access)
 
         Args:
             file_path: Path to a local file to upload.
             url: URL of a remote file (HTTP/HTTPS or S3 presigned URL).
-            s3_uri: S3 URI (s3://bucket/key) to copy from.
+            source_s3_uri: S3 URI (s3://bucket/key) to copy from.
             filename: Optional filename to use (defaults to file basename).
             scs_job_id: Optional job ID to group files together.
             conversion_formats: Dict of format names to enable (e.g., {'mmd': True, 'docx': True}).
             conversion_options: Additional conversion options dict.
             destination_s3_uri: Optional S3 URI to write output files.
+            destination_basename: Optional basename for output files (defaults to file_id).
+            s3_region: Optional AWS region for S3 operations (default us-east-1).
+            image_output_mode: Image output mode (e.g., 'local' to upload to destination_s3_uri).
+            include_page_info: Include page info in output (default None).
             metadata: Optional dict to attach metadata to the request.
             alphabets_allowed: Optional dict to list alphabets allowed in the output.
             rm_spaces: Remove extra white space from equations (default True).
@@ -689,14 +705,14 @@ class MathpixClient:
             FilesApiFile: A new FilesApiFile instance for tracking processing status.
 
         Raises:
-            ValidationError: If not exactly one of file_path, url, or s3_uri is provided.
+            ValidationError: If not exactly one of file_path, url, or source_s3_uri is provided.
             FileNotFoundError: If the specified file_path does not exist.
             MathpixClientError: If the API request fails.
         """
-        source_count = sum(x is not None for x in [file_path, url, s3_uri])
+        source_count = sum(x is not None for x in [file_path, url, source_s3_uri])
         if source_count != 1:
-            logger.error("Invalid parameters: Exactly one of file_path, url, or s3_uri must be provided")
-            raise ValidationError("Exactly one of file_path, url, or s3_uri must be provided")
+            logger.error("Invalid parameters: Exactly one of file_path, url, or source_s3_uri must be provided")
+            raise ValidationError("Exactly one of file_path, url, or source_s3_uri must be provided")
         options: Dict[str, object] = {
             "conversion_formats": conversion_formats or {},
             "metadata": {
@@ -708,6 +724,14 @@ class MathpixClient:
             options["scs_job_id"] = scs_job_id
         if destination_s3_uri:
             options["destination_s3_uri"] = destination_s3_uri
+        if destination_basename:
+            options["destination_basename"] = destination_basename
+        if s3_region:
+            options["s3_region"] = s3_region
+        if image_output_mode:
+            options["image_output_mode"] = image_output_mode
+        if include_page_info is not None:
+            options["include_page_info"] = include_page_info
         if alphabets_allowed is not None:
             options["alphabets_allowed"] = alphabets_allowed
         if not rm_spaces:
@@ -783,9 +807,9 @@ class MathpixClient:
             except requests.exceptions.RequestException as e:
                 raise MathpixClientError(f"Mathpix files-api request failed: {e}")
         else:
-            logger.debug(f"Creating new file via files-api: s3_uri={s3_uri}")
+            logger.debug(f"Creating new file via files-api: source_s3_uri={source_s3_uri}")
             endpoint = urljoin(self.auth.files_api_url, '/files/v1/s3')
-            options["s3_uri"] = s3_uri
+            options["source_s3_uri"] = source_s3_uri
             if filename:
                 options["filename"] = filename
             try:

@@ -53,6 +53,39 @@ def test_file_upload_url(client: MathpixClient):
     assert status['status'] == 'completed'
 
 
+def test_file_upload_s3(client: MathpixClient):
+    """Test uploading from an S3 URI via files-api."""
+    file = client.file_new(
+        source_s3_uri="s3://mathpix-ocr-examples/bitcoin-7.pdf",
+        conversion_formats={'mmd': True},
+    )
+    assert file.file_id is not None
+    assert isinstance(file, FilesApiFile)
+    assert file.wait_until_complete(timeout=120)
+    status = file.status()
+    assert status['status'] == 'completed'
+
+
+def test_file_upload_s3_with_options(client: MathpixClient):
+    """Test S3 upload with additional options (destination, region, etc.)."""
+    file = client.file_new(
+        source_s3_uri="s3://mathpix-ocr-examples/bitcoin-7.pdf",
+        filename="test-bitcoin.pdf",
+        scs_job_id="test-s3-options-job",
+        conversion_formats={'mmd': True, 'md': True},
+        destination_s3_uri="s3://mathpix-ocr-examples/test_pdf_outputs",
+        destination_basename="test-bitcoin",
+        s3_region="us-east-1",
+        include_equation_tags=True,
+        preserve_section_numbering=True,
+    )
+    assert file.file_id is not None
+    assert isinstance(file, FilesApiFile)
+    assert file.wait_until_complete(timeout=180)
+    status = file.status()
+    assert status['status'] == 'completed'
+
+
 def test_file_status(client: MathpixClient):
     """Test getting file status."""
     pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
