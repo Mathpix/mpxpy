@@ -635,13 +635,13 @@ class MathpixClient:
             filename: Optional[str] = None,
             scs_job_id: Optional[str] = None,
             conversion_formats: Optional[Dict[str, bool]] = None,
-            conversion_options: Optional[Dict[str, Any]] = None,
+            conversion_options: Optional[Dict[str, object]] = None,
             destination_s3_uri: Optional[str] = None,
             destination_basename: Optional[str] = None,
             s3_region: Optional[str] = None,
             image_output_mode: Optional[str] = None,
             include_page_info: Optional[bool] = None,
-            metadata: Optional[Dict[str, Any]] = None,
+            metadata: Optional[Dict[str, object]] = None,
             alphabets_allowed: Optional[Dict[str, str]] = None,
             rm_spaces: Optional[bool] = True,
             rm_fonts: Optional[bool] = False,
@@ -713,13 +713,12 @@ class MathpixClient:
         if source_count != 1:
             logger.error("Invalid parameters: Exactly one of file_path, url, or source_s3_uri must be provided")
             raise ValidationError("Exactly one of file_path, url, or source_s3_uri must be provided")
-        options: Dict[str, object] = {
-            "conversion_formats": conversion_formats or {},
-            "metadata": {
-                "mpxpy": True,
-                **(metadata or {})
-            },
-        }
+        options: Dict[str, object] = {}
+        options["metadata"] = {"mpxpy": True}
+        if metadata:
+            options["metadata"].update(metadata)
+        if conversion_formats:
+            options["conversion_formats"] = conversion_formats
         if scs_job_id:
             options["scs_job_id"] = scs_job_id
         if destination_s3_uri:
@@ -778,6 +777,7 @@ class MathpixClient:
                 raise FileNotFoundError(f"File path not found: {file_path}")
             endpoint = urljoin(self.auth.files_api_url, '/files/v1')
             data = {"options_json": json.dumps(options)}
+            # For files/v1, filename is a form field (not in options_json)
             if filename:
                 data["filename"] = filename
             with path.open("rb") as f:
