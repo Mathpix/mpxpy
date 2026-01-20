@@ -1,6 +1,6 @@
 import os
 import pytest
-from mpxpy import MathpixClient, FilesApiFile, ScsJob
+from mpxpy.mathpix_client import MathpixClient, FilesApiFile, ScsJob
 from mpxpy.errors import ValidationError
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -9,10 +9,7 @@ current_dir = os.path.dirname(os.path.abspath(__file__))
 @pytest.fixture
 def client():
     """Create client with separate files_api_url for local docker testing."""
-    return MathpixClient(
-        api_url=os.getenv('MATHPIX_URL', 'http://mathpix-ocr-service:8070'),
-        files_api_url=os.getenv('FILES_API_URL', 'http://mathpix-files-api:9094'),
-    )
+    return MathpixClient()
 
 
 def test_file_upload_local(client: MathpixClient):
@@ -181,7 +178,3 @@ def test_scs_job_wait_until_complete(client: MathpixClient):
     status = job.status()
     # Job should exist and have counters, or return error if job metadata not created
     assert 'scs_job_id' in status or 'error' in status
-
-
-if __name__ == '__main__':
-    pass
