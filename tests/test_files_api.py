@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta, timezone
 import os
 from typing import List
 import pytest
@@ -217,6 +218,21 @@ def test_list_jobs(client: MathpixClient):
     """Test listing SCS jobs."""
     result = client.list_jobs(limit=10)
     assert 'jobs' in result or 'error' not in result
+
+
+def test_list_jobs_with_date_range(client: MathpixClient):
+    """Test listing SCS jobs with start/end date filters."""
+    today = datetime.now(timezone.utc)
+    start = (today - timedelta(days=7)).strftime('%Y-%m-%d')
+    end = today.strftime('%Y-%m-%d')
+    result = client.list_jobs(start=start, end=end, limit=10)
+    assert 'jobs' in result
+    # Verify returned jobs are within date range
+    for job in result['jobs']:
+        assert 'created_at' in job
+        created = job['created_at'][:10]  # Extract YYYY-MM-DD
+        assert created >= start, f"Job created_at {created} is before start {start}"
+        assert created <= end, f"Job created_at {created} is after end {end}"
 
 
 def test_job_status(client: MathpixClient):
