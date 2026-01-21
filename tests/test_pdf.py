@@ -4,7 +4,7 @@ from typing import Dict
 
 import pytest
 
-from mpxpy.errors import ConversionIncompleteError, ValidationError
+from mpxpy.errors import ValidationError
 from mpxpy.mathpix_client import MathpixClient
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -284,6 +284,17 @@ def test_pdf_save_html_zip_to_local_path(client: MathpixClient):
             shutil.rmtree(output_dir)
 
 
-if __name__ == '__main__':
-    pass
-
+def test_pdf_delete(client: MathpixClient):
+    """Test deleting a PDF after processing is complete."""
+    pdf_file_path = os.path.join(current_dir, "files/pdfs/sample.pdf")
+    assert os.path.exists(pdf_file_path), f"Test input file not found: {pdf_file_path}"
+    pdf = client.pdf_new(file_path=pdf_file_path)
+    assert pdf.pdf_id is not None
+    assert pdf.wait_until_complete(timeout=60)
+    status = pdf.pdf_status()
+    assert status['status'] == 'completed'
+    # Delete the PDF
+    delete_result = pdf.delete()
+    assert delete_result is not None
+    # Response contains pdf_id field
+    assert delete_result.get('pdf_id') == pdf.pdf_id

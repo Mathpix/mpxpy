@@ -8,6 +8,8 @@ from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
 from mpxpy.scs_file import ScsFile
+from mpxpy.strokes import StrokesResult
+from mpxpy.batch import Batch
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError
@@ -909,3 +911,279 @@ class MathpixClient:
             return response.json()
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix files-api job status request failed: {e}")
+
+    def query_usage(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            usage_type: Optional[str] = None,
+            request_args_hash: Optional[str] = None,
+            timespan: Optional[str] = None,
+            group_by: Optional[List[str]] = None,
+            page: int = 1,
+            per_page: int = 100,
+    ):
+        """Query API usage statistics.
+
+        Args:
+            from_date: Start date for usage query (ISO 8601 format).
+            to_date: End date for usage query (ISO 8601 format).
+            app_id: Filter by application ID.
+            usage_type: Filter by usage type (e.g., 'image', 'pdf-page', 'strokes-session').
+            request_args_hash: Filter by request args hash.
+            timespan: Aggregation period ('hour', 'day', 'month', 'year').
+            group_by: Fields to group by (['app_id', 'usage_type', 'request_args_hash']).
+            page: Page number (1-100, default 1).
+            per_page: Results per page (1-1000, default 100).
+
+        Returns:
+            dict: Response with 'ocr_usage' list containing usage records.
+        """
+        logger.debug("Querying usage statistics")
+        endpoint = urljoin(self.auth.api_url, 'v3/ocr-usage')
+        params: Dict[str, object] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        if usage_type:
+            params['usage_type'] = usage_type
+        if request_args_hash:
+            params['request_args_hash'] = request_args_hash
+        if timespan:
+            params['timespan'] = timespan
+        if group_by:
+            params['group_by'] = ','.join(group_by)
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix usage query failed: {e}")
+
+    def query_ocr_results(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            request_id: Optional[str] = None,
+            pdf_id: Optional[str] = None,
+            tags: Optional[List[str]] = None,
+            include_null_results: bool = False,
+            page: int = 1,
+            per_page: int = 100,
+    ):
+        """Query historical OCR results.
+
+        Args:
+            from_date: Start date for results query (ISO 8601 format).
+            to_date: End date for results query (ISO 8601 format).
+            app_id: Filter by application ID.
+            request_id: Filter by image request ID.
+            pdf_id: Filter by PDF ID.
+            tags: Filter by tags (JSONB containment filter).
+            include_null_results: Include results where result is null (default False).
+            page: Page number (1-100, default 1).
+            per_page: Results per page (1-1000, default 100).
+
+        Returns:
+            dict: Response with 'ocr_results' list.
+        """
+        logger.debug("Querying OCR results")
+        endpoint = urljoin(self.auth.api_url, 'v3/ocr-results')
+        params: Dict[str, object] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        if request_id:
+            params['request_id'] = request_id
+        if pdf_id:
+            params['pdf_id'] = pdf_id
+        if tags:
+            params['tags'] = json.dumps(tags)
+        if include_null_results:
+            params['include_null_results'] = 'true'
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix OCR results query failed: {e}")
+
+    def query_pdf_results(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            pdf_id: Optional[str] = None,
+            page: int = 1,
+            per_page: int = 100,
+    ):
+        """Query historical PDF results.
+
+        Args:
+            from_date: Start date for results query (ISO 8601 format).
+            to_date: End date for results query (ISO 8601 format).
+            app_id: Filter by application ID.
+            pdf_id: Filter by PDF ID.
+            page: Page number (1-1000, default 1).
+            per_page: Results per page (1-100, default 100).
+
+        Returns:
+            dict: Response with 'pdfs' list.
+        """
+        logger.debug("Querying PDF results")
+        endpoint = urljoin(self.auth.api_url, 'v3/pdf-results')
+        params: Dict[str, Any] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        if pdf_id:
+            params['pdf_id'] = pdf_id
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix PDF results query failed: {e}")
+
+    def strokes_new(
+            self,
+            strokes: Dict[str, List[List[int]]],
+            metadata: Optional[Dict[str, Any]] = None,
+            callback: Optional[Dict[str, Any]] = None,
+            is_async: bool = False,
+    ) -> StrokesResult:
+        """Recognize handwritten strokes.
+
+        Args:
+            strokes: Dict with 'x' and 'y' keys (required), 't' optional for timestamps.
+                Each value is a list of lists of integers, where each inner list
+                represents one stroke (sequence of points).
+                Example: {"x": [[33, 34, 36], [65, 64]], "y": [[188, 190, 194], [192, 194]]}
+            metadata: Optional dict to attach metadata to the request.
+            callback: Optional Callback Object for async notification.
+            is_async: If True, returns immediately with session_id for polling.
+
+        Returns:
+            StrokesResult: Object containing recognition results (latex, text, confidence).
+
+        Raises:
+            ValidationError: If strokes format is invalid (missing x/y, mismatched lengths).
+            MathpixClientError: If the API request fails.
+        """
+        if 'x' not in strokes or 'y' not in strokes:
+            raise ValidationError("Strokes must contain 'x' and 'y' keys")
+        if not strokes['x'] or not strokes['y']:
+            raise ValidationError("Strokes 'x' and 'y' must be non-empty lists")
+        if len(strokes['x']) != len(strokes['y']):
+            raise ValidationError("Strokes 'x' and 'y' must have the same number of strokes")
+        for i, (x_stroke, y_stroke) in enumerate(zip(strokes['x'], strokes['y'])):
+            if len(x_stroke) != len(y_stroke):
+                raise ValidationError(f"Stroke {i}: x and y must have the same number of points")
+            if len(x_stroke) == 0:
+                raise ValidationError(f"Stroke {i}: cannot be empty")
+        logger.debug("Submitting strokes for recognition")
+        endpoint = urljoin(self.auth.api_url, 'v3/strokes')
+        # API expects doubly-nested strokes: {"strokes": {"strokes": {"x": ..., "y": ...}}}
+        body: Dict[str, Any] = {"strokes": {"strokes": strokes}}
+        if metadata:
+            body["metadata"] = metadata
+        if callback:
+            body["callback"] = callback
+        if is_async:
+            body["async"] = is_async
+        try:
+            response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            result = response.json()
+            return StrokesResult(result)
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix strokes request failed: {e}")
+
+    def batch_new(
+            self,
+            urls: Dict[str, Any],
+            ocr_behavior: str = "latex",
+            callback: Optional[Dict[str, Any]] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            formats: Optional[List[str]] = None,
+            data_options: Optional[Dict[str, Any]] = None,
+            include_detected_alphabets: bool = False,
+            alphabets_allowed: Optional[Dict[str, str]] = None,
+            confidence_threshold: Optional[float] = None,
+            confidence_rate_threshold: Optional[float] = None,
+    ) -> Batch:
+        """Submit multiple images for batch processing.
+
+        Args:
+            urls: Dict mapping keys to image sources. Values can be:
+                - String URL: "https://example.com/image.jpg"
+                - Data URL: "data:image/jpg;base64,..."
+                - Object with options: {"url": "...", "formats": [...], "region": {...}}
+            ocr_behavior: Processing mode - "latex" (default) or "text".
+            callback: Optional callback configuration for async notification.
+                Example: {"post": "https://...", "reply": {}, "body": {}, "headers": {}}
+            metadata: Optional metadata dict to attach to the request.
+            formats: Optional list of output formats (applies to all items unless overridden).
+            data_options: Optional DataOptions dict for text mode.
+            include_detected_alphabets: Return detected alphabets in results.
+            alphabets_allowed: Dict specifying allowed alphabets.
+            confidence_threshold: File-level confidence threshold (0-1).
+            confidence_rate_threshold: Symbol-level confidence threshold (0-1).
+
+        Returns:
+            Batch: A Batch instance for tracking progress and retrieving results.
+
+        Raises:
+            ValidationError: If urls is empty or invalid.
+            MathpixClientError: If the API request fails.
+        """
+        if not urls:
+            raise ValidationError("urls dict must not be empty")
+        logger.debug(f"Submitting batch with {len(urls)} images")
+        endpoint = urljoin(self.auth.api_url, 'v3/batch')
+        body: Dict[str, Any] = {
+            "urls": urls,
+            "ocr_behavior": ocr_behavior,
+        }
+        if callback:
+            body["callback"] = callback
+        if metadata:
+            body["metadata"] = metadata
+        if formats:
+            body["formats"] = formats
+        if data_options:
+            body["data_options"] = data_options
+        if include_detected_alphabets:
+            body["include_detected_alphabets"] = include_detected_alphabets
+        if alphabets_allowed:
+            body["alphabets_allowed"] = alphabets_allowed
+        if confidence_threshold is not None:
+            body["confidence_threshold"] = confidence_threshold
+        if confidence_rate_threshold is not None:
+            body["confidence_rate_threshold"] = confidence_rate_threshold
+        if not self.improve_mathpix:
+            if "metadata" not in body:
+                body["metadata"] = {}
+            body["metadata"]["improve_mathpix"] = False
+        try:
+            response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            result = response.json()
+            batch_id = result.get('batch_id')
+            if not batch_id:
+                raise MathpixClientError(f"No batch_id in response: {result}")
+            logger.debug(f"Batch created with ID: {batch_id}")
+            return Batch(auth=self.auth, batch_id=batch_id, request_options=self.request_options)
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix batch request failed: {e}")

@@ -5,8 +5,8 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urljoin
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
-from mpxpy.errors import ValidationError, ConversionIncompleteError, FilesystemError
-from mpxpy.request_handler import get
+from mpxpy.errors import ValidationError, ConversionIncompleteError, FilesystemError, MathpixClientError
+from mpxpy.request_handler import get, delete
 
 
 class Pdf:
@@ -595,3 +595,26 @@ class Pdf:
             ConversionIncompleteError: If the conversion is not complete
         """
         return self.bytes_result(conversion_format='html.zip')
+
+    def delete(self):
+        """Delete this PDF and all associated files from S3.
+
+        The PDF must be in 'completed' or 'error' status (not in-progress).
+        This operation deletes the PDF and all its converted formats from storage.
+
+        Returns:
+            dict: Pre-deletion status info including 'deleted_at' timestamp
+
+        Raises:
+            MathpixClientError: If PDF is still in progress or delete fails
+        """
+        logger.debug(f"Deleting PDF {self.pdf_id}")
+        endpoint = urljoin(self.auth.api_url, f'v3/pdf/{self.pdf_id}')
+        response = delete(endpoint, headers=self.auth.headers, **self.request_options)
+        result = response.json()
+        if response.status_code == 404:
+            raise MathpixClientError(f"PDF not found: {self.pdf_id}")
+        if 'error' in result:
+            raise MathpixClientError(f"Cannot delete PDF: {result.get('error')}")
+        logger.debug(f"PDF {self.pdf_id} deleted at {result.get('deleted_at')}")
+        return result
