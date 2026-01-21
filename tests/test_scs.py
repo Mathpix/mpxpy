@@ -1,6 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import os
 from pathlib import Path
+import re
 from typing import List
 import pytest
 from mpxpy.mathpix_client import MathpixClient
@@ -615,3 +616,44 @@ def test_file_save_to_directory(client: MathpixClient, tmp_path: Path):
     assert os.path.exists(saved_path)
     assert saved_path.endswith('.mmd')
     assert os.path.getsize(saved_path) > 0
+
+
+def test_cropped_image(client: MathpixClient):
+    """Test getting a cropped image from a processed PDF.
+
+    Uses multiple_images_1.pdf which contains images, then extracts crop
+    coordinates from the mmd output and verifies the cropped_image endpoint.
+    """
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'multiple_images_1.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'mmd': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    # Get mmd output and extract a cropped image URL
+    mmd_text = file.to_mmd_text()
+    # Pattern: https://cdn.mathpix.com/cropped/{file_id}-{page}.jpg?height=X&width=Y&top_left_y=Z&top_left_x=W
+    pattern = re.compile(
+        r'https://cdn\.mathpix\.com/cropped/[^?]+\?'
+        r'height=(\d+)&width=(\d+)&top_left_y=(\d+)&top_left_x=(\d+)'
+    )
+    match = pattern.search(mmd_text)
+    assert match, "No cropped image URL found in mmd output"
+    height, width, top_left_y, top_left_x = map(int, match.groups())
+    # Extract page number from the URL (format: {file_id}-{page}.jpg)
+    page_pattern = re.compile(r'/cropped/.+-(\d+)\.jpg')
+    page_match = page_pattern.search(match.group(0))
+    assert page_match, f"Could not extract page number from cropped URL: {match.group(0)}"
+    page = int(page_match.group(1))
+    # Call cropped_image endpoint
+    cropped_bytes = file.cropped_image(
+        page=page,
+        top_left_x=top_left_x,
+        top_left_y=top_left_y,
+        width=width,
+        height=height,
+    )
+    assert cropped_bytes is not None
+    assert len(cropped_bytes) > 0
+    # Verify JPEG magic bytes
+    assert cropped_bytes[:2] == b'\xff\xd8', "Response is not a valid JPEG"
