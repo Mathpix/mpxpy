@@ -415,6 +415,38 @@ def test_file_download_xlsx(client: MathpixClient):
     assert len(xlsx_bytes) > 0
 
 
+def test_file_download_jpg(client: MathpixClient):
+    """Test downloading JPG output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'jpg': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('jpg', timeout=60)
+    jpg_bytes = file.to_jpg_bytes()
+    assert jpg_bytes is not None
+    assert len(jpg_bytes) > 0
+    # Verify JPEG magic bytes
+    assert jpg_bytes[:2] == b'\xff\xd8'
+
+
+def test_file_download_png(client: MathpixClient):
+    """Test downloading PNG output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'png': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('png', timeout=60)
+    png_bytes = file.to_png_bytes()
+    assert png_bytes is not None
+    assert len(png_bytes) > 0
+    # Verify PNG magic bytes
+    assert png_bytes[:8] == b'\x89PNG\r\n\x1a\n'
+
+
 def test_file_download_lines_json(client: MathpixClient):
     """Test downloading lines.json output.
 

@@ -83,7 +83,8 @@ class ScsFile:
         Polls the file status until the format is complete or the timeout is reached.
 
         Args:
-            format: The format to wait for (e.g., 'md', 'docx', 'tex.zip').
+            format: The format to wait for (e.g., 'md', 'docx', 'latex', 'tex.zip').
+                Note: Use 'latex' not 'tex' - the API uses 'latex' for status polling.
             timeout: Maximum number of seconds to wait. Must be a positive, non-zero integer.
 
         Returns:
@@ -94,6 +95,9 @@ class ScsFile:
         """
         if not isinstance(timeout, int) or timeout <= 0:
             raise ValidationError("Timeout must be a positive, non-zero integer")
+        if format == 'tex':
+            logger.info("wait_for_format: 'tex' converted to 'latex' (API uses 'latex' for status)")
+            format = 'latex'
         logger.debug(f"Waiting for file {self.file_id} format '{format}' to complete (timeout: {timeout}s)")
         attempt = 1
         while attempt < timeout:
