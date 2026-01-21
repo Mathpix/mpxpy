@@ -236,10 +236,6 @@ class ScsFile:
         """Get the processed file result as Markdown string."""
         return self.text_result(conversion_format='md')
 
-    def to_txt_text(self) -> str:
-        """Get the processed file result as plain text string."""
-        return self.text_result(conversion_format='txt')
-
     def to_tex_text(self) -> str:
         """Get the processed file result as LaTeX string."""
         return self.text_result(conversion_format='tex')

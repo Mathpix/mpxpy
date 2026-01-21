@@ -1,5 +1,6 @@
 from datetime import datetime, timedelta, timezone
 import os
+from pathlib import Path
 from typing import List
 import pytest
 from mpxpy.mathpix_client import MathpixClient
@@ -269,3 +270,316 @@ def test_job_status_after_file_complete(client: MathpixClient):
     # Then verify the job status endpoint returns a response
     status = client.scs_job_status(scs_job_id)
     assert 'scs_job_id' in status or 'error' in status
+
+
+def test_file_download_tex(client: MathpixClient):
+    """Test downloading TEX output.
+
+    Note: The conversion format is 'latex' but the download extension is 'tex'.
+    """
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'latex': True},  # Must use 'latex' not 'tex'
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('latex', timeout=60)
+    tex_text = file.to_tex_text()
+    assert tex_text is not None
+    assert len(tex_text) > 0
+
+
+def test_file_download_pptx(client: MathpixClient):
+    """Test downloading PPTX output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'pptx': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('pptx', timeout=60)
+    pptx_bytes = file.to_pptx_bytes()
+    assert pptx_bytes is not None
+    assert len(pptx_bytes) > 0
+
+
+def test_file_download_pdf(client: MathpixClient):
+    """Test downloading PDF output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'pdf': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('pdf', timeout=60)
+    pdf_bytes = file.to_pdf_bytes()
+    assert pdf_bytes is not None
+    assert len(pdf_bytes) > 0
+
+
+def test_file_download_latex_pdf(client: MathpixClient):
+    """Test downloading LaTeX-rendered PDF output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'latex.pdf': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('latex.pdf', timeout=60)
+    latex_pdf_bytes = file.to_latex_pdf_bytes()
+    assert latex_pdf_bytes is not None
+    assert len(latex_pdf_bytes) > 0
+
+
+def test_file_download_html(client: MathpixClient):
+    """Test downloading HTML output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'html': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('html', timeout=60)
+    html_bytes = file.to_html_bytes()
+    assert html_bytes is not None
+    assert len(html_bytes) > 0
+
+
+def test_file_download_tex_zip(client: MathpixClient):
+    """Test downloading tex.zip output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'tex.zip': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('tex.zip', timeout=60)
+    tex_zip_bytes = file.to_tex_zip_bytes()
+    assert tex_zip_bytes is not None
+    assert len(tex_zip_bytes) > 0
+
+
+def test_file_download_md_zip(client: MathpixClient):
+    """Test downloading md.zip output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'md.zip': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('md.zip', timeout=60)
+    md_zip_bytes = file.to_md_zip_bytes()
+    assert md_zip_bytes is not None
+    assert len(md_zip_bytes) > 0
+
+
+def test_file_download_mmd_zip(client: MathpixClient):
+    """Test downloading mmd.zip output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'mmd.zip': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('mmd.zip', timeout=60)
+    mmd_zip_bytes = file.to_mmd_zip_bytes()
+    assert mmd_zip_bytes is not None
+    assert len(mmd_zip_bytes) > 0
+
+
+def test_file_download_html_zip(client: MathpixClient):
+    """Test downloading html.zip output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'html.zip': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('html.zip', timeout=60)
+    html_zip_bytes = file.to_html_zip_bytes()
+    assert html_zip_bytes is not None
+    assert len(html_zip_bytes) > 0
+
+
+def test_file_download_xlsx(client: MathpixClient):
+    """Test downloading XLSX output."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'xlsx': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('xlsx', timeout=60)
+    xlsx_bytes = file.to_xlsx_bytes()
+    assert xlsx_bytes is not None
+    assert len(xlsx_bytes) > 0
+
+
+def test_file_download_lines_json(client: MathpixClient):
+    """Test downloading lines.json output.
+
+    Note: lines.json doesn't have a dedicated status column - it's available
+    when the overall job status is 'completed'.
+    """
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'mmd': True},  # lines.json is generated from primary OCR
+    )
+    assert file.wait_until_complete(timeout=120)
+    # No wait_for_format needed - lines.json is available when job completes
+    lines_json = file.to_lines_json()
+    assert lines_json is not None
+    assert isinstance(lines_json, dict)
+
+
+def test_file_download_lines_mmd_json(client: MathpixClient):
+    """Test downloading lines.mmd.json output.
+
+    Note: lines.mmd.json doesn't have a dedicated status column - it's available
+    when the overall job status is 'completed'.
+    """
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'mmd': True},  # lines.mmd.json is generated from primary OCR
+    )
+    assert file.wait_until_complete(timeout=120)
+    # No wait_for_format needed - lines.mmd.json is available when job completes
+    lines_mmd_json = file.to_lines_mmd_json()
+    assert lines_mmd_json is not None
+    assert isinstance(lines_mmd_json, dict)
+
+
+def test_file_save_mmd(client: MathpixClient, tmp_path: Path):
+    """Test saving MMD output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'mmd': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    output_path = str(tmp_path / 'output.mmd')
+    saved_path = file.to_mmd_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_md(client: MathpixClient, tmp_path: Path):
+    """Test saving MD output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'md': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('md', timeout=60)
+    output_path = str(tmp_path / 'output.md')
+    saved_path = file.to_md_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_docx(client: MathpixClient, tmp_path: Path):
+    """Test saving DOCX output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'docx': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('docx', timeout=60)
+    output_path = str(tmp_path / 'output.docx')
+    saved_path = file.to_docx_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_pptx(client: MathpixClient, tmp_path: Path):
+    """Test saving PPTX output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'pptx': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('pptx', timeout=60)
+    output_path = str(tmp_path / 'output.pptx')
+    saved_path = file.to_pptx_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_pdf(client: MathpixClient, tmp_path: Path):
+    """Test saving PDF output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'pdf': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('pdf', timeout=60)
+    output_path = str(tmp_path / 'output.pdf')
+    saved_path = file.to_pdf_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_html(client: MathpixClient, tmp_path: Path):
+    """Test saving HTML output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'html': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('html', timeout=60)
+    output_path = str(tmp_path / 'output.html')
+    saved_path = file.to_html_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_tex_zip(client: MathpixClient, tmp_path: Path):
+    """Test saving tex.zip output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'tex.zip': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('tex.zip', timeout=60)
+    output_path = str(tmp_path / 'output.tex.zip')
+    saved_path = file.to_tex_zip_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_xlsx(client: MathpixClient, tmp_path: Path):
+    """Test saving XLSX output to file."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'xlsx': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    assert file.wait_for_format('xlsx', timeout=60)
+    output_path = str(tmp_path / 'output.xlsx')
+    saved_path = file.to_xlsx_file(output_path)
+    assert os.path.exists(saved_path)
+    assert os.path.getsize(saved_path) > 0
+
+
+def test_file_save_to_directory(client: MathpixClient, tmp_path: Path):
+    """Test saving output to directory (auto-generates filename)."""
+    pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
+    file = client.scs_file_new(
+        file_path=pdf_path,
+        conversion_formats={'mmd': True},
+    )
+    assert file.wait_until_complete(timeout=120)
+    output_dir = str(tmp_path) + '/'
+    saved_path = file.to_mmd_file(output_dir)
+    assert os.path.exists(saved_path)
+    assert saved_path.endswith('.mmd')
+    assert os.path.getsize(saved_path) > 0
