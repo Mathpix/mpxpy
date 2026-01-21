@@ -8,7 +8,6 @@ from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
 from mpxpy.files_api import FilesApiFile
-from mpxpy.scs_job import ScsJob
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError
@@ -894,13 +893,21 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix files-api list jobs request failed: {e}")
 
-    def job_status(self, scs_job_id: str) -> ScsJob:
-        """Get an ScsJob instance for tracking job status.
+    def job_status(self, scs_job_id: str):
+        """Get the current status of an SCS job.
 
         Args:
-            scs_job_id: The job ID to track.
+            scs_job_id: The job ID to get status for.
 
         Returns:
-            ScsJob: An ScsJob instance for the given job ID.
+            JSON response containing job status information.
         """
-        return ScsJob(auth=self.auth, scs_job_id=scs_job_id, request_options=self.request_options)
+        logger.debug(f"Getting status for SCS job {scs_job_id}")
+        endpoint = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs/status')
+        params = {'scs_job_id': scs_job_id}
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api job status request failed: {e}")

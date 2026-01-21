@@ -2,7 +2,7 @@ from datetime import datetime, timedelta, timezone
 import os
 from typing import List
 import pytest
-from mpxpy.mathpix_client import MathpixClient, FilesApiFile, ScsJob
+from mpxpy.mathpix_client import MathpixClient, FilesApiFile
 from mpxpy.errors import ValidationError
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -247,14 +247,12 @@ def test_job_status(client: MathpixClient):
     )
     assert file.file_id is not None
     # Get job status
-    job = client.job_status(scs_job_id)
-    assert isinstance(job, ScsJob)
-    status = job.status()
+    status = client.job_status(scs_job_id)
     assert 'scs_job_id' in status or 'error' in status
 
 
-def test_scs_job_wait_until_complete(client: MathpixClient):
-    """Test waiting for SCS job to complete."""
+def test_job_status_after_file_complete(client: MathpixClient):
+    """Test job status after file processing completes."""
     import uuid
     pdf_path = os.path.join(current_dir, 'files', 'pdfs', 'sample.pdf')
     scs_job_id = f'test-job-wait-{uuid.uuid4().hex[:8]}'
@@ -263,10 +261,8 @@ def test_scs_job_wait_until_complete(client: MathpixClient):
         scs_job_id=scs_job_id,
         conversion_formats={'mmd': True},
     )
-    # First wait for the file itself to complete (this we know works)
+    # First wait for the file itself to complete
     assert file.wait_until_complete(timeout=120)
     # Then verify the job status endpoint returns a response
-    job = client.job_status(scs_job_id)
-    status = job.status()
-    # Job should exist and have counters, or return error if job metadata not created
+    status = client.job_status(scs_job_id)
     assert 'scs_job_id' in status or 'error' in status
