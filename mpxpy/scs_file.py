@@ -9,7 +9,7 @@ from mpxpy.request_handler import get
 from mpxpy.errors import FilesystemError, ValidationError, ConversionIncompleteError
 
 
-class FilesApiFile:
+class ScsFile:
     """Manages a file through the files-api v1 endpoint.
 
     This class handles operations on Mathpix files, including checking status,
@@ -206,7 +206,7 @@ class FilesApiFile:
             raise ConversionIncompleteError("Format not ready yet")
         return response.content
 
-    def json_result(self, conversion_format: str) -> Dict:
+    def json_result(self, conversion_format: str):
         """Helper method to download the processed file result as JSON.
 
         Args:
@@ -294,11 +294,11 @@ class FilesApiFile:
         return self.bytes_result(conversion_format='png')
 
     # JSON format methods
-    def to_lines_json(self) -> Dict:
+    def to_lines_json(self):
         """Get the processed file result as lines.json."""
         return self.json_result(conversion_format='lines.json')
 
-    def to_lines_mmd_json(self) -> Dict:
+    def to_lines_mmd_json(self):
         """Get the processed file result as lines.mmd.json."""
         return self.json_result(conversion_format='lines.mmd.json')
 

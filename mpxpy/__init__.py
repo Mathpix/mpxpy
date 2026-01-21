@@ -1,5 +1,5 @@
 from mpxpy.mathpix_client import MathpixClient
-from mpxpy.files_api import FilesApiFile
+from mpxpy.scs_file import ScsFile
 from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.conversion import Conversion
@@ -14,7 +14,7 @@ from mpxpy.errors import (
 
 __all__ = [
     "MathpixClient",
-    "FilesApiFile",
+    "ScsFile",
     "Pdf",
     "Image",
     "Conversion",

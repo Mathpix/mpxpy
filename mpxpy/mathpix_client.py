@@ -7,7 +7,7 @@ from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
-from mpxpy.files_api import FilesApiFile
+from mpxpy.scs_file import ScsFile
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError
@@ -626,7 +626,7 @@ class MathpixClient:
                 logger.error(f"Conversion failed: {response_json}")
             raise MathpixClientError(f"Mathpix conversion request failed: {e}")
 
-    def file_new(
+    def scs_file_new(
             self,
             file_path: Optional[str] = None,
             url: Optional[str] = None,
@@ -659,7 +659,7 @@ class MathpixClient:
             preserve_section_numbering: Optional[bool] = True,
             enable_tables_fallback: Optional[bool] = False,
             fullwidth_punctuation: Optional[bool] = None,
-    ) -> FilesApiFile:
+    ):
         """Upload a file via files-api v1 for async processing.
 
         Supports three upload modes (exactly one must be provided):
@@ -700,9 +700,6 @@ class MathpixClient:
             enable_tables_fallback: Enable advanced table processing (default False).
             fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
 
-        Returns:
-            FilesApiFile: A new FilesApiFile instance for tracking processing status.
-
         Raises:
             ValidationError: If not exactly one of file_path, url, or source_s3_uri is provided.
             FileNotFoundError: If the specified file_path does not exist.
@@ -713,9 +710,10 @@ class MathpixClient:
             logger.error("Invalid parameters: Exactly one of file_path, url, or source_s3_uri must be provided")
             raise ValidationError("Exactly one of file_path, url, or source_s3_uri must be provided")
         options: Dict[str, object] = {}
-        options["metadata"] = {"mpxpy": True}
+        _metadata: Dict[str, object] = {"mpxpy": True}
         if metadata:
-            options["metadata"].update(metadata)
+            _metadata.update(metadata)
+        options["metadata"] = _metadata
         if conversion_formats:
             options["conversion_formats"] = conversion_formats
         if scs_job_id:
@@ -789,7 +787,7 @@ class MathpixClient:
                     response_json = response.json()
                     file_id = response_json['file_id']
                     logger.debug(f"File upload started, file_id: {file_id}")
-                    return FilesApiFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+                    return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
                 except requests.exceptions.RequestException as e:
                     raise MathpixClientError(f"Mathpix files-api request failed: {e}")
         elif url:
@@ -804,7 +802,7 @@ class MathpixClient:
                 response_json = response.json()
                 file_id = response_json['file_id']
                 logger.debug(f"File from URL started, file_id: {file_id}")
-                return FilesApiFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
             except requests.exceptions.RequestException as e:
                 raise MathpixClientError(f"Mathpix files-api request failed: {e}")
         else:
@@ -819,11 +817,11 @@ class MathpixClient:
                 response_json = response.json()
                 file_id = response_json['file_id']
                 logger.debug(f"File from S3 started, file_id: {file_id}")
-                return FilesApiFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
             except requests.exceptions.RequestException as e:
                 raise MathpixClientError(f"Mathpix files-api request failed: {e}")
 
-    def list_files(
+    def list_scs_files(
             self,
             scs_job_id: Optional[str] = None,
             filename: Optional[str] = None,
@@ -859,7 +857,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix files-api list request failed: {e}")
 
-    def list_jobs(
+    def list_scs_jobs(
             self,
             start: Optional[str] = None,
             end: Optional[str] = None,
@@ -893,7 +891,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix files-api list jobs request failed: {e}")
 
-    def job_status(self, scs_job_id: str):
+    def scs_job_status(self, scs_job_id: str):
         """Get the current status of an SCS job.
 
         Args:
