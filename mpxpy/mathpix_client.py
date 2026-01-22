@@ -956,7 +956,7 @@ class MathpixClient:
         if timespan:
             params['timespan'] = timespan
         if group_by:
-            params['group_by'] = ','.join(group_by)
+            params['group_by'] = group_by
         try:
             response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
             response.raise_for_status()
