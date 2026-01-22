@@ -1006,7 +1006,7 @@ class MathpixClient:
         if pdf_id:
             params['pdf_id'] = pdf_id
         if tags:
-            params['tags'] = json.dumps(tags)
+            params['tags'] = tags
         if include_null_results:
             params['include_null_results'] = 'true'
         try:
