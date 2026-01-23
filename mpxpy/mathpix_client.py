@@ -1084,6 +1084,43 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix PDF results query failed: {e}")
 
+    def query_converter_results(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            page: int = 1,
+            per_page: int = 100,
+    ):
+        """Query historical converter results.
+
+        Args:
+            from_date: Start date for results query (ISO 8601 format).
+            to_date: End date for results query (ISO 8601 format).
+            app_id: Filter by application ID.
+            page: Page number (1-1000, default 1).
+            per_page: Results per page (1-100, default 100).
+
+        Returns:
+            dict: Response with 'documents' list containing conversion results.
+                Each document has: id, input_file, status, created_at, modified_at, request_args.
+        """
+        logger.debug("Querying converter results")
+        endpoint = urljoin(self.auth.api_url, 'v3/converter-results')
+        params: Dict[str, Any] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix converter results query failed: {e}")
+
     def strokes_new(
             self,
             strokes: Dict[str, List[List[int]]],
