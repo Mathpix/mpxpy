@@ -975,6 +975,13 @@ class MathpixClient:
             include_null_results: bool = False,
             page: int = 1,
             per_page: int = 100,
+            contains_chemistry: Optional[bool] = None,
+            contains_diagram: Optional[bool] = None,
+            is_handwritten: Optional[bool] = None,
+            is_printed: Optional[bool] = None,
+            contains_table: Optional[bool] = None,
+            contains_triangle: Optional[bool] = None,
+            contains_algorithm: Optional[bool] = None,
     ):
         """Query historical OCR results.
 
@@ -988,6 +995,13 @@ class MathpixClient:
             include_null_results: Include results where result is null (default False).
             page: Page number (1-100, default 1).
             per_page: Results per page (1-1000, default 100).
+            contains_chemistry: Filter by chemistry content detection.
+            contains_diagram: Filter by diagram content detection.
+            is_handwritten: Filter by handwritten content detection.
+            is_printed: Filter by printed content detection.
+            contains_table: Filter by table content detection.
+            contains_triangle: Filter by triangle content detection.
+            contains_algorithm: Filter by algorithm content detection.
 
         Returns:
             dict: Response with 'ocr_results' list.
@@ -1008,7 +1022,21 @@ class MathpixClient:
         if tags:
             params['tags'] = tags
         if include_null_results:
-            params['include_null_results'] = 'true'
+            params['include_null_results'] = include_null_results
+        if contains_chemistry is not None:
+            params['contains_chemistry'] = contains_chemistry
+        if contains_diagram is not None:
+            params['contains_diagram'] = contains_diagram
+        if is_handwritten is not None:
+            params['is_handwritten'] = is_handwritten
+        if is_printed is not None:
+            params['is_printed'] = is_printed
+        if contains_table is not None:
+            params['contains_table'] = contains_table
+        if contains_triangle is not None:
+            params['contains_triangle'] = contains_triangle
+        if contains_algorithm is not None:
+            params['contains_algorithm'] = contains_algorithm
         try:
             response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
             response.raise_for_status()
