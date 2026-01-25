@@ -204,3 +204,5 @@ def test_conversion_delete(client: MathpixClient):
     assert status['status'] == 'completed'
     delete_result = client.conversion_delete(conversion.conversion_id)
     assert delete_result is not None
+    with pytest.raises(ConversionIncompleteError):
+        conversion.to_docx_bytes()

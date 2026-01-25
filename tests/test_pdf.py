@@ -4,7 +4,7 @@ from typing import Dict
 
 import pytest
 
-from mpxpy.errors import ValidationError
+from mpxpy.errors import ValidationError, ConversionIncompleteError
 from mpxpy.mathpix_client import MathpixClient
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -296,3 +296,5 @@ def test_pdf_delete(client: MathpixClient):
     delete_result = client.pdf_delete(pdf.pdf_id)
     assert delete_result is not None
     assert delete_result.get('pdf_id') == pdf.pdf_id
+    with pytest.raises(ConversionIncompleteError):
+        pdf.to_mmd_text()
