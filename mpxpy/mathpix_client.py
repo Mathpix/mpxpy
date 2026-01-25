@@ -1124,29 +1124,16 @@ class MathpixClient:
             self,
             strokes: Dict[str, List[List[int]]],
             strokes_session_id: Optional[str] = None,
-            metadata: Optional[Dict[str, Any]] = None,
-            callback: Optional[Dict[str, Any]] = None,
-            is_async: bool = False,
     ):
         """Recognize handwritten strokes.
 
         Args:
-            strokes: Dict with 'x' and 'y' keys (required), 't' optional for timestamps.
-                Each value is a list of lists of integers, where each inner list
-                represents one stroke (sequence of points).
+            strokes: Dict with 'x' and 'y' keys, each containing list of strokes.
                 Example: {"x": [[33, 34, 36], [65, 64]], "y": [[188, 190, 194], [192, 194]]}
-            strokes_session_id: Optional session ID from app_token_new(include_strokes_session_id=True).
-                Enables incremental stroke submission for live drawing scenarios.
-            metadata: Optional dict to attach metadata to the request.
-            callback: Optional Callback Object for async notification.
-            is_async: If True, returns immediately with session_id for polling.
+            strokes_session_id: Optional session ID for incremental stroke submission.
 
         Returns:
-            dict: Raw API response containing recognition results (latex, text, confidence).
-
-        Raises:
-            ValidationError: If strokes format is invalid (missing x/y, mismatched lengths).
-            MathpixClientError: If the API request fails.
+            dict: API response with latex, text, confidence, etc.
         """
         if 'x' not in strokes or 'y' not in strokes:
             raise ValidationError("Strokes must contain 'x' and 'y' keys")
@@ -1159,18 +1146,10 @@ class MathpixClient:
                 raise ValidationError(f"Stroke {i}: x and y must have the same number of points")
             if len(x_stroke) == 0:
                 raise ValidationError(f"Stroke {i}: cannot be empty")
-        logger.debug("Submitting strokes for recognition")
         endpoint = urljoin(self.auth.api_url, 'v3/strokes')
-        # API expects doubly-nested strokes: {"strokes": {"strokes": {"x": ..., "y": ...}}}
         body: Dict[str, Any] = {"strokes": {"strokes": strokes}}
         if strokes_session_id:
             body["strokes_session_id"] = strokes_session_id
-        if metadata:
-            body["metadata"] = metadata
-        if callback:
-            body["callback"] = callback
-        if is_async:
-            body["async"] = is_async
         try:
             response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
             response.raise_for_status()
