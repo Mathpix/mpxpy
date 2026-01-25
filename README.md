@@ -2,15 +2,15 @@
 
 The official Python client for the Mathpix API. Process PDFs and images, and convert math/text content with the Mathpix API.
 
-# Setup
+## Setup
 
-## Installation
+### Installation
 
 ```bash
 pip install mpxpy
 ```
 
-## Authentication
+### Authentication
 
 You'll need a Mathpix API app_id and app_key to use this client. You can get these from [Mathpix Console](https://console.mathpix.com/).
 
@@ -26,13 +26,13 @@ MathpixClient will prioritize auth configs in the following order:
 3. ENV vars located in `.env`
 4. ENV vars located in `local.env`
 
-## Initialization
+### Initialization
 
-### Using environment variables
+#### Using environment variables
 
 Create a config file at `~/.mpx/config` or add ENV variables to `.env` or `local.env` files:
 
-```
+```bash
 MATHPIX_APP_ID=your-app-id
 MATHPIX_APP_KEY=your-app-key
 MATHPIX_URL=https://api.mathpix.com  # optional, defaults to this value
@@ -47,7 +47,7 @@ from mpxpy.mathpix_client import MathpixClient
 client = MathpixClient()
 ```
 
-### Using arguments
+#### Using arguments
 
 You can also pass in your App ID and App Key when initializing the client:
 
@@ -61,7 +61,7 @@ client = MathpixClient(
 )
 ```
 
-### Improve Mathpix
+#### Improve Mathpix
 
 You can optionally set `improve_mathpix` to False to prevent Mathpix from retaining any outputs from a client. This can also be set on a per-request-basis, but if a client has `improve_mathpix` disabled, all requests made using that client will also be disabled.
 
@@ -73,9 +73,7 @@ client = MathpixClient(
 )
 ```
 
-# Process PDFs
-
-## Basic Usage
+## Process PDFs
 
 ```python
 from mpxpy.mathpix_client import MathpixClient
@@ -120,9 +118,7 @@ lines_json_output_path = pdf.to_lines_json_file(path='output/sample.lines.json')
 lines_json = pdf.to_lines_json() # parses JSON into type Dict
 ```
 
-# Process Images
-
-## Basic Usage
+## Process Images
 
 ```python
 from mpxpy.mathpix_client import MathpixClient
@@ -168,10 +164,7 @@ async_image.wait_until_complete(timeout=5)
 result = async_image.results()
 ```
 
-
-# Convert Mathpix Markdown (MMD)
-
-## Basic Usage
+## Convert Mathpix Markdown (MMD)
 
 ```python
 from mpxpy.mathpix_client import MathpixClient
@@ -210,9 +203,9 @@ pptx_output_path = conversion.to_pptx_file(path='output/sample.pptx')
 pptx_bytes = conversion.to_pptx_bytes() # is of type bytes
 ```
 
-# Class Definitions
+## API Reference
 
-## MathpixClient
+### MathpixClient
 
 The MathpixClient class is used to add authenticate and create requests.
 
@@ -259,7 +252,7 @@ Returns a new Image instance
 - `include_line_data`: Optional boolean to return information segmented line by line
 - `include_word_data`: Optional boolean to return information segmented word by word
 - `include_smiles`: Optional boolean to enable experimental chemistry diagram OCR via RDKIT normalized SMILES
-- `include_inchi`: Optional boolean to include InChI data as XML attributes inside <smiles> elements
+- `include_inchi`: Optional boolean to include InChI data as XML attributes inside `<smiles>` elements
 - `include_geometry_data`: Optional boolean to enable data extraction for geometry diagrams (currently only supports triangle diagrams)
 - `include_diagram_text`: Optional boolean to enable text extraction from diagrams (for use with "include_line_data": True). The extracted text will be part of line data, and not part of the "text" or any other output format specified. the "parent_id" of these text lines will correspond to the "id" of one of the diagrams in the line data. Diagrams will also have "children_ids" to store references to those text lines
 - `auto_rotate_confidence_threshold`: Optional number between 0 and 1 to specify threshold for auto rotating images to the correct orientation, default 0.99
@@ -277,7 +270,7 @@ Returns a new Image instance
 
 ### `pdf_new`
 
-Returns a new Pdf instance. 
+Returns a new Pdf instance.
 
 **Arguments**
 
@@ -317,7 +310,7 @@ Returns a new Pdf instance.
 
 ### `conversion_new`
 
-Returns a new Conversion instance. 
+Returns a new Conversion instance.
 
 **Arguments**
 
@@ -450,7 +443,7 @@ Returns a new Conversion instance.
 - `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images
 - `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes
 
-# Error Handling
+## Error Handling
 
 The client provides detailed error information in the following classes:
 
@@ -478,9 +471,7 @@ except ConversionIncompleteError as e:
     print(f'Conversions are not complete')
 ```
 
-# Development
-
-## Setup
+## Development
 
 ```bash
 # Clone the repository
@@ -493,7 +484,7 @@ pip install -e .
 pip install -r requirements.txt
 ```
 
-## Running Tests
+### Running Tests
 
 To run tests you will need to add [authentication](#authentication).
 
@@ -506,13 +497,13 @@ pip install -r requirements.txt
 pytest
 ```
 
-## Logging
+### Logging
 
-To configure the logger level, which is set at `INFO` by default, set the MATHPIX_LOG_LEVEL env variable to the desired logger level. 
+To configure the logger level, which is set at `INFO` by default, set the MATHPIX_LOG_LEVEL env variable to the desired logger level.
 
 - `DEBUG`: logs all events, including polling events
 - `INFO`: logs all events except for polling events
 
-```
+```bash
 MATHPIX_LOG_LEVEL=DEBUG
 ```
