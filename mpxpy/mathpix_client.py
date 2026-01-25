@@ -1180,7 +1180,7 @@ class MathpixClient:
             expires: Optional[int] = None,
             include_strokes_session_id: bool = False,
             user_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+    ):
         """Create a new app token.
 
         App tokens are short-lived tokens for client-side authentication.
@@ -1219,7 +1219,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Failed to create app token: {e}")
 
-    def app_token_get(self, app_token: str) -> Dict[str, Any]:
+    def app_token_get(self, app_token: str):
         """Get information about an app token.
 
         Args:
@@ -1245,7 +1245,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Failed to get app token: {e}")
 
-    def app_token_delete(self, app_token: str) -> Dict[str, Any]:
+    def app_token_delete(self, app_token: str):
         """Delete an app token.
 
         Args:
