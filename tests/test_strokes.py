@@ -1,6 +1,7 @@
+import json
+from pathlib import Path
 import pytest
 from mpxpy.mathpix_client import MathpixClient
-from mpxpy.strokes import StrokesResult
 from mpxpy.errors import ValidationError
 
 
@@ -9,55 +10,29 @@ def client():
     return MathpixClient()
 
 
-# Sample stroke data representing "3x^2"
-SAMPLE_STROKES = {
-    "x": [
-        [131, 131, 130, 129, 128, 128, 128, 129, 131, 134, 138, 143, 150, 157, 167, 175, 184, 186, 188],
-        [131, 130, 128, 126, 125, 126, 129, 134, 141, 150, 160, 169, 179, 188, 195],
-        [231, 231, 233, 237, 244, 253, 264, 276, 288, 296],
-        [305, 306, 310, 316, 325, 335, 347, 358, 368],
-        [383, 384, 387, 393, 401, 412, 423, 433, 443]
-    ],
-    "y": [
-        [188, 190, 194, 202, 213, 223, 233, 239, 241, 242, 239, 232, 222, 211, 198, 188, 181, 180, 180],
-        [192, 192, 194, 198, 206, 217, 228, 239, 249, 258, 264, 267, 267, 263, 258],
-        [199, 198, 198, 199, 202, 206, 210, 213, 215, 216],
-        [188, 188, 189, 191, 194, 196, 198, 198, 197],
-        [138, 139, 140, 143, 147, 151, 155, 157, 157]
-    ]
-}
+@pytest.fixture
+def quadratic_strokes() -> dict[str, list[list[int]]]:
+    """Load quadratic equation strokes from JSON file."""
+    strokes_path = Path(__file__).parent / "files" / "strokes" / "quadratic_eq.json"
+    with open(strokes_path) as f:
+        data = json.load(f)
+    return data["strokes"]
 
 
-def test_strokes_recognition(client: MathpixClient):
+def test_strokes_recognition(client: MathpixClient, quadratic_strokes: dict[str, list[list[int]]]):
     """Test basic stroke recognition."""
-    result = client.strokes_new(strokes=SAMPLE_STROKES)
-    assert isinstance(result, StrokesResult)
-    assert result.request_id is not None
+    result = client.strokes_new(strokes=quadratic_strokes)
+    assert isinstance(result, dict)
+    assert 'request_id' in result
     # Should recognize something - check that we get a response
-    assert result.latex is not None or result.text is not None
+    assert result.get('latex') is not None or result.get('text') is not None
 
 
-def test_strokes_result_attributes(client: MathpixClient):
-    """Test that StrokesResult has all expected attributes."""
-    result = client.strokes_new(strokes=SAMPLE_STROKES)
-    # Check all attributes exist (may be None but should be accessible)
-    assert hasattr(result, 'session_id')
-    assert hasattr(result, 'request_id')
-    assert hasattr(result, 'text')
-    assert hasattr(result, 'latex')
-    assert hasattr(result, 'latex_simplified')
-    assert hasattr(result, 'latex_confidence')
-    assert hasattr(result, 'position')
-    assert hasattr(result, 'detection_map')
-    assert hasattr(result, 'detection_list')
-
-
-def test_strokes_to_dict(client: MathpixClient):
-    """Test that to_dict() returns the raw response."""
-    result = client.strokes_new(strokes=SAMPLE_STROKES)
-    raw_dict = result.to_dict()
-    assert isinstance(raw_dict, dict)
-    assert 'request_id' in raw_dict
+def test_strokes_response_fields(client: MathpixClient, quadratic_strokes: dict[str, list[list[int]]]):
+    """Test that response contains expected fields."""
+    result = client.strokes_new(strokes=quadratic_strokes)
+    assert isinstance(result, dict)
+    assert 'request_id' in result
 
 
 def test_strokes_validation_missing_x():
@@ -111,17 +86,24 @@ def test_strokes_validation_empty_stroke():
         })
 
 
-def test_strokes_repr():
-    """Test StrokesResult string representation."""
-    result = StrokesResult({"latex": "x^2", "latex_confidence": 0.95, "request_id": "test"})
-    repr_str = repr(result)
-    assert "x^2" in repr_str
-    assert "0.95" in repr_str
-
-
-def test_strokes_repr_with_error():
-    """Test StrokesResult string representation with error."""
-    result = StrokesResult({"error": "test error", "request_id": "test"})
-    repr_str = repr(result)
-    assert "error" in repr_str
-    assert "test error" in repr_str
+def test_strokes_session(client: MathpixClient, quadratic_strokes: dict[str, list[list[int]]]):
+    """Test that strokes session with incremental strokes produces same result as one-shot."""
+    # Get one-shot result
+    oneshot_result = client.strokes_new(strokes=quadratic_strokes)
+    oneshot_latex = oneshot_result.get('latex')
+    # Create app token with strokes session
+    token_result = client.app_token_new(include_strokes_session_id=True)
+    strokes_session_id = token_result['strokes_session_id']
+    # Submit strokes incrementally (simulating live drawing)
+    num_strokes = len(quadratic_strokes['x'])
+    session_result = None
+    for i in range(num_strokes):
+        partial_strokes = {
+            'x': quadratic_strokes['x'][i: i + 1],
+            'y': quadratic_strokes['y'][i: i + 1],
+        }
+        session_result = client.strokes_new(strokes=partial_strokes, strokes_session_id=strokes_session_id)
+    assert session_result is not None
+    session_latex = session_result.get('latex')
+    # Final result should match one-shot
+    assert oneshot_latex == session_latex

@@ -8,7 +8,6 @@ from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
 from mpxpy.scs_file import ScsFile
-from mpxpy.strokes import StrokesResult
 from mpxpy.batch import Batch
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
@@ -1124,10 +1123,11 @@ class MathpixClient:
     def strokes_new(
             self,
             strokes: Dict[str, List[List[int]]],
+            strokes_session_id: Optional[str] = None,
             metadata: Optional[Dict[str, Any]] = None,
             callback: Optional[Dict[str, Any]] = None,
             is_async: bool = False,
-    ) -> StrokesResult:
+    ):
         """Recognize handwritten strokes.
 
         Args:
@@ -1135,12 +1135,14 @@ class MathpixClient:
                 Each value is a list of lists of integers, where each inner list
                 represents one stroke (sequence of points).
                 Example: {"x": [[33, 34, 36], [65, 64]], "y": [[188, 190, 194], [192, 194]]}
+            strokes_session_id: Optional session ID from app_token_new(include_strokes_session_id=True).
+                Enables incremental stroke submission for live drawing scenarios.
             metadata: Optional dict to attach metadata to the request.
             callback: Optional Callback Object for async notification.
             is_async: If True, returns immediately with session_id for polling.
 
         Returns:
-            StrokesResult: Object containing recognition results (latex, text, confidence).
+            dict: Raw API response containing recognition results (latex, text, confidence).
 
         Raises:
             ValidationError: If strokes format is invalid (missing x/y, mismatched lengths).
@@ -1161,6 +1163,8 @@ class MathpixClient:
         endpoint = urljoin(self.auth.api_url, 'v3/strokes')
         # API expects doubly-nested strokes: {"strokes": {"strokes": {"x": ..., "y": ...}}}
         body: Dict[str, Any] = {"strokes": {"strokes": strokes}}
+        if strokes_session_id:
+            body["strokes_session_id"] = strokes_session_id
         if metadata:
             body["metadata"] = metadata
         if callback:
@@ -1170,8 +1174,7 @@ class MathpixClient:
         try:
             response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
             response.raise_for_status()
-            result = response.json()
-            return StrokesResult(result)
+            return response.json()
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix strokes request failed: {e}")
 
