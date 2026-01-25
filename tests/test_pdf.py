@@ -293,8 +293,6 @@ def test_pdf_delete(client: MathpixClient):
     assert pdf.wait_until_complete(timeout=60)
     status = pdf.pdf_status()
     assert status['status'] == 'completed'
-    # Delete the PDF
-    delete_result = pdf.delete()
+    delete_result = client.pdf_delete(pdf.pdf_id)
     assert delete_result is not None
-    # Response contains pdf_id field
     assert delete_result.get('pdf_id') == pdf.pdf_id

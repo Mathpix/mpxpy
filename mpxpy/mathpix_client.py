@@ -513,6 +513,42 @@ class MathpixClient:
                     logger.error(f"PDF upload failed: {response_json}")
                 raise MathpixClientError(f"Mathpix PDF request failed: {e}")
 
+    def pdf_delete(self, pdf_id: str):
+        """Delete a PDF and all associated files from S3.
+
+        Args:
+            pdf_id: The PDF ID to delete.
+
+        Returns:
+            dict: Pre-deletion status info including 'deleted_at' timestamp.
+        """
+        endpoint = urljoin(self.auth.api_url, f'v3/pdf/{pdf_id}')
+        response = requests.delete(endpoint, headers=self.auth.headers, **self.request_options)
+        result = response.json()
+        if response.status_code == 404:
+            raise MathpixClientError(f"PDF not found: {pdf_id}")
+        if 'error' in result:
+            raise MathpixClientError(f"Cannot delete PDF: {result.get('error')}")
+        return result
+
+    def conversion_delete(self, conversion_id: str):
+        """Delete a conversion and all associated output files from S3.
+
+        Args:
+            conversion_id: The conversion ID to delete.
+
+        Returns:
+            dict: Final status info for the conversion.
+        """
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{conversion_id}')
+        response = requests.delete(endpoint, headers=self.auth.headers, **self.request_options)
+        result = response.json()
+        if response.status_code == 404:
+            raise MathpixClientError(f"Conversion not found: {conversion_id}")
+        if 'error' in result:
+            raise MathpixClientError(f"Cannot delete conversion: {result.get('error')}")
+        return result
+
     def file_batch_new(self):
         """Creates a new file batch ID that can be used to group multiple file uploads.
 
