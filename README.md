@@ -205,13 +205,13 @@ pptx_bytes = conversion.to_pptx_bytes() # is of type bytes
 
 ## API Reference
 
-### MathpixClient
+### `MathpixClient`
 
 The MathpixClient class is used to add authenticate and create requests.
 
-### Constructor
+#### `MathpixClient` Constructor
 
-**Arguments**
+##### `MathpixClient` Constructor Arguments
 
 - `app_id`: Optional Mathpix application ID. If None, will use environment variable.
 - `app_key`: Optional Mathpix application key. If None, will use environment variable.
@@ -219,19 +219,19 @@ The MathpixClient class is used to add authenticate and create requests.
 - `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true.
 - `request_options`: Optional dict of keyword arguments to pass to the requests. Default is None.
 
-### Properties
+#### `MathpixClient` Properties
 
 - `auth`: An Auth instance managing API credentials and endpoints.
 - `improve_mathpix`: Boolean to enable/disable Mathpix retaining user output.
 - `request_options`: Dict of keyword arguments passed to the requests library. Default is None.
 
-### Methods
+#### `MathpixClient` Methods
 
-### `image_new`
+##### `MathpixClient.image_new`
 
 Returns a new Image instance
 
-**Arguments**
+###### `MathpixClient.image_new` Arguments
 
 - `file_path`: Path to a local image file.
 - `url`: URL of a remote image.
@@ -239,11 +239,11 @@ Returns a new Image instance
 - `metadata`: Optional dict to attach metadata to a request
 - `tags`: Optional list of strings which can be used to identify results using the /v3/ocr-results endpoint
 - `is_async`: Optional boolean to enable non-interactive requests
-- `callback`: Optional Callback Object (see https://docs.mathpix.com/#callback-object)
+- `callback`: Optional Callback Object (see [Callback Object](https://docs.mathpix.com/#callback-object))
 - `formats`: Optional list of formats ('text', 'data', 'html', or 'latex_styled')
-- `data_options`: Optional DataOptions dict (see https://docs.mathpix.com/#dataoptions-object)
+- `data_options`: Optional DataOptions dict (see [DataOptions Object](https://docs.mathpix.com/#dataoptions-object))
 - `include_detected_alphabets`: Optional boolean to return the detected alphabets
-- `alphabets_allowed`: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/#alphabetsallowed-object)
+- `alphabets_allowed`: Optional dict to list alphabets allowed in the output (see [AlphabetsAllowed Object](https://docs.mathpix.com/#alphabetsallowed-object))
 - `region`: Optional dict to specify the image area with pixel coordinates 'top_left_x', 'top_left_y', 'width', 'height'
 - `enable_blue_hsv_filter`: Optional boolean to enable a special mode of image processing where it processes blue hue text exclusively
 - `confidence_threshold`: Optional number between 0 and 1 to specify a threshold for triggering confidence errors (file level threshold)
@@ -268,16 +268,16 @@ Returns a new Image instance
 - `enable_tables_fallback`: Optional boolean to enable an advanced table processing algorithm that supports very large and complex tables
 - `fullwidth_punctuation`: Optional boolean to specify whether punctuation will be fullwidth Unicode
 
-### `pdf_new`
+##### `MathpixClient.pdf_new`
 
 Returns a new Pdf instance.
 
-**Arguments**
+###### `MathpixClient.pdf_new` Arguments
 
 - `file_path`: Path to a local PDF file.
 - `url`: URL of a remote PDF file.
 - `metadata`: Optional dict to attach metadata to a request
-- `alphabets_allowed`: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/#alphabetsallowed-object)
+- `alphabets_allowed`: Optional dict to list alphabets allowed in the output (see [AlphabetsAllowed Object](https://docs.mathpix.com/#alphabetsallowed-object))
 - `rm_spaces`: Optional boolean to determine whether extra white space is removed from equations in "latex_styled" and "text" formats
 - `rm_fonts`: Optional boolean to determine whether font commands such as \mathbf and \mathrm are removed from equations in "latex_styled" and "text" formats
 - `idiomatic_eqn_arrays`: Optional boolean to specify whether to use aligned, gathered, or cases instead of an array environment for a list of equations
@@ -308,11 +308,11 @@ Returns a new Pdf instance.
 - `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
 - `file_batch_id`: Optional batch ID to associate this file with.
 
-### `conversion_new`
+##### `MathpixClient.conversion_new`
 
 Returns a new Conversion instance.
 
-**Arguments**
+###### `MathpixClient.conversion_new` Arguments
 
 - `mmd`: Mathpix Markdown content to convert.
 - `convert_to_docx`: Optional boolean to convert your result to docx
@@ -326,9 +326,9 @@ Returns a new Conversion instance.
 - `convert_to_pptx`: Optional boolean to automatically convert your result to pptx
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip
 
-## Pdf Class Documentation
+### `Pdf`
 
-### Properties
+#### `Pdf` Properties
 
 - `auth`: An Auth instance with Mathpix credentials.
 - `pdf_id`: The unique identifier for this PDF.
@@ -346,7 +346,7 @@ Returns a new Conversion instance.
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip (HTML with local images folder)
 - `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
 
-### Methods
+#### `Pdf` Methods
 
 - `wait_until_complete`: Wait for the PDF processing and optional conversions to complete
 - `pdf_status`: Get the current status of the PDF processing
@@ -376,9 +376,9 @@ Returns a new Conversion instance.
 - `to_html_zip_file`: Save the processed PDF result to a ZIP file containing HTML output and any embedded images
 - `to_html_zip_bytes`: Get the processed PDF result in ZIPPED HTML format as bytes
 
-## Image Class Documentation
+### `Image`
 
-### Properties
+#### `Image` Properties
 
 - `auth`: An Auth instance with Mathpix credentials
 - `request_id`: A string storing the request_id of the image
@@ -390,7 +390,7 @@ Returns a new Conversion instance.
 - `is_async`: Optional boolean to enable non-interactive requests
 - `result`: A Dict to containing a request's result as initially configured
 
-### Methods
+#### `Image` Methods
 
 - `results`: Get the full JSON response for the image
 - `wait_until_complete`: Wait for async image processing to complete
@@ -399,9 +399,9 @@ Returns a new Conversion instance.
 - `latex_styled`: Get the latex_styled representation of the image.
 - `html`: Get the html representation of the image.
 
-## Conversion Class Documentation
+### `Conversion`
 
-### Properties
+#### `Conversion` Properties
 
 - `auth`: An Auth instance with Mathpix credentials.
 - `conversion_id`: The unique identifier for this conversion.
@@ -416,7 +416,7 @@ Returns a new Conversion instance.
 - `convert_to_pptx`: Optional boolean to automatically convert your result to pptx (PowerPoint)
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip (HTML with local images folder)
 
-### Methods
+#### `Conversion` Methods
 
 - `wait_until_complete`: Wait for the conversion to complete
 - `conversion_status`: Get the current status of the conversion
