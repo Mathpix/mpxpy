@@ -1175,6 +1175,101 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix strokes request failed: {e}")
 
+    def app_token_new(
+            self,
+            expires: Optional[int] = None,
+            include_strokes_session_id: bool = False,
+            user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Create a new app token.
+
+        App tokens are short-lived tokens for client-side authentication.
+        They can optionally include a strokes session ID for incremental
+        handwriting recognition.
+
+        Args:
+            expires: Token expiration in seconds (30-43200, default 300).
+                If include_strokes_session_id is True, max is 300.
+            include_strokes_session_id: If True, creates a strokes session
+                and returns strokes_session_id. Max expiration becomes 300s.
+            user_id: Optional user ID to associate with this token.
+
+        Returns:
+            dict: Response containing:
+                - app_token: The generated token string
+                - app_token_expires_at: Expiration timestamp (ms since epoch)
+                - strokes_session_id: Session ID (only if include_strokes_session_id=True)
+
+        Raises:
+            MathpixClientError: If the API request fails.
+        """
+        logger.debug("Creating new app token")
+        endpoint = urljoin(self.auth.api_url, 'v3/app-tokens')
+        body: Dict[str, Any] = {}
+        if expires is not None:
+            body['expires'] = expires
+        if include_strokes_session_id:
+            body['include_strokes_session_id'] = True
+        if user_id is not None:
+            body['user_id'] = user_id
+        try:
+            response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Failed to create app token: {e}")
+
+    def app_token_get(self, app_token: str) -> Dict[str, Any]:
+        """Get information about an app token.
+
+        Args:
+            app_token: The app token to query.
+
+        Returns:
+            dict: Response containing:
+                - app_token: The token string
+                - app_token_expires_at: Expiration timestamp (ms since epoch)
+                - app_id: Application ID
+                - group_id: Group ID
+                - user_id: User ID
+
+        Raises:
+            MathpixClientError: If the API request fails or token not found.
+        """
+        logger.debug(f"Getting app token info: {app_token[:20]}...")
+        endpoint = urljoin(self.auth.api_url, f'v3/app-tokens/{app_token}')
+        try:
+            response = get(endpoint, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Failed to get app token: {e}")
+
+    def app_token_delete(self, app_token: str) -> Dict[str, Any]:
+        """Delete an app token.
+
+        Args:
+            app_token: The app token to delete.
+
+        Returns:
+            dict: Response containing:
+                - app_token: The deleted token string
+                - app_id: Application ID
+                - group_id: Group ID
+                - user_id: User ID
+
+        Raises:
+            MathpixClientError: If the API request fails or token not found.
+        """
+        logger.debug(f"Deleting app token: {app_token[:20]}...")
+        endpoint = urljoin(self.auth.api_url, f'v3/app-tokens/{app_token}')
+        try:
+            response = requests.delete(endpoint, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Failed to delete app token: {e}")
+
     def batch_new(
             self,
             urls: Dict[str, Any],
