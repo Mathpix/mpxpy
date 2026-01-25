@@ -129,3 +129,72 @@ def test_batch_with_per_item_options(client: MathpixClient):
     assert completed
     results = batch.results()
     assert "custom" in results
+
+
+def test_batch_with_metadata(client: MathpixClient):
+    """Test batch with metadata."""
+    batch = client.batch_new(
+        urls={"algebra": TEST_IMAGE_URLS["algebra"]},
+        metadata={"source": "test", "user_id": "123"}
+    )
+    completed = batch.wait_until_complete(timeout=60)
+    assert completed
+    results = batch.results()
+    assert "algebra" in results
+
+
+def test_batch_with_confidence_threshold(client: MathpixClient):
+    """Test batch with confidence threshold."""
+    batch = client.batch_new(
+        urls={"algebra": TEST_IMAGE_URLS["algebra"]},
+        confidence_threshold=0.5,
+        confidence_rate_threshold=0.3
+    )
+    completed = batch.wait_until_complete(timeout=60)
+    assert completed
+    results = batch.results()
+    assert "algebra" in results
+
+
+def test_batch_with_include_detected_alphabets(client: MathpixClient):
+    """Test batch with include_detected_alphabets option."""
+    batch = client.batch_new(
+        urls={"algebra": TEST_IMAGE_URLS["algebra"]},
+        include_detected_alphabets=True
+    )
+    completed = batch.wait_until_complete(timeout=60)
+    assert completed
+    results = batch.results()
+    assert "algebra" in results
+    # Result should include detected_alphabets when requested
+    result = results["algebra"]
+    if "error" not in result:
+        assert "detected_alphabets" in result
+
+
+def test_batch_with_alphabets_allowed(client: MathpixClient):
+    """Test batch with alphabets_allowed option."""
+    batch = client.batch_new(
+        urls={"algebra": TEST_IMAGE_URLS["algebra"]},
+        alphabets_allowed={"en": True, "zh": False}
+    )
+    completed = batch.wait_until_complete(timeout=60)
+    assert completed
+    results = batch.results()
+    assert "algebra" in results
+
+
+def test_batch_text_mode_with_data_options(client: MathpixClient):
+    """Test batch in text mode with data_options."""
+    batch = client.batch_new(
+        urls={"algebra": TEST_IMAGE_URLS["algebra"]},
+        ocr_behavior="text",
+        data_options={
+            "include_latex": True,
+            "include_mathml": True
+        }
+    )
+    completed = batch.wait_until_complete(timeout=60)
+    assert completed
+    results = batch.results()
+    assert "algebra" in results
