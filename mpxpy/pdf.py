@@ -5,7 +5,7 @@ from typing import Optional, Dict, Any, List
 from urllib.parse import urljoin
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
-from mpxpy.errors import ValidationError, ConversionIncompleteError, FilesystemError, MathpixClientError
+from mpxpy.errors import ValidationError, ConversionIncompleteError, FilesystemError
 from mpxpy.request_handler import get
 
 
