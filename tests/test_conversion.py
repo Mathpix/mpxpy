@@ -194,5 +194,15 @@ def test_conversion_save_html_zip_to_local_path(client):
         if os.path.exists(output_dir) and os.path.isdir(output_dir):
             shutil.rmtree(output_dir)
 
-if __name__ == '__main__':
-    pass
+def test_conversion_delete(client: MathpixClient):
+    """Test deleting a conversion after it completes."""
+    mmd = r'\( x^2 + y^2 = z^2 \)'
+    conversion = client.conversion_new(mmd=mmd, convert_to_docx=True)
+    assert conversion.conversion_id is not None
+    conversion.wait_until_complete(timeout=10)
+    status = conversion.conversion_status()
+    assert status['status'] == 'completed'
+    delete_result = client.conversion_delete(conversion.conversion_id)
+    assert delete_result is not None
+    with pytest.raises(ConversionIncompleteError):
+        conversion.to_docx_bytes()

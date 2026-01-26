@@ -7,10 +7,12 @@ from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.file_batch import FileBatch
 from mpxpy.conversion import Conversion
+from mpxpy.scs_file import ScsFile
+from mpxpy.batch import Batch
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError
-from mpxpy.request_handler import post
+from mpxpy.request_handler import post, get
 
 
 class MathpixClient:
@@ -22,18 +24,27 @@ class MathpixClient:
     Attributes:
         auth: An Auth instance managing API credentials and endpoints.
     """
-    def __init__(self, app_id: str = None, app_key: str = None, api_url: str = None, improve_mathpix: bool = True, request_options: dict = None):
+    def __init__(
+        self,
+        app_id: Optional[str] = None,
+        app_key: Optional[str] = None,
+        api_url: Optional[str] = None,
+        files_api_url: Optional[str] = None,
+        improve_mathpix: bool = True,
+        request_options: Optional[Dict[str, Any]] = None
+    ):
         """Initialize a new Mathpix client.
 
         Args:
             app_id: Optional Mathpix application ID. If None, will use environment variable.
             app_key: Optional Mathpix application key. If None, will use environment variable.
             api_url: Optional Mathpix API URL. If None, will use environment variable or default to the production API.
+            files_api_url: Optional files-api URL for internal testing. If None, defaults to api_url.
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true.
             request_options: Optional dict of keyword arguments to pass to the requests library (e.g. {'verify': False} for SSL verification).
         """
         logger.debug("Initializing MathpixClient")
-        self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url)
+        self.auth = Auth(app_id=app_id, app_key=app_key, api_url=api_url, files_api_url=files_api_url)
         configure_logging()
         self.improve_mathpix = improve_mathpix
         self.request_options = request_options or {}
@@ -502,6 +513,42 @@ class MathpixClient:
                     logger.error(f"PDF upload failed: {response_json}")
                 raise MathpixClientError(f"Mathpix PDF request failed: {e}")
 
+    def pdf_delete(self, pdf_id: str):
+        """Delete a PDF and all associated files from S3.
+
+        Args:
+            pdf_id: The PDF ID to delete.
+
+        Returns:
+            dict: Pre-deletion status info including 'deleted_at' timestamp.
+        """
+        endpoint = urljoin(self.auth.api_url, f'v3/pdf/{pdf_id}')
+        response = requests.delete(endpoint, headers=self.auth.headers, **self.request_options)
+        result = response.json()
+        if response.status_code == 404:
+            raise MathpixClientError(f"PDF not found: {pdf_id}")
+        if 'error' in result:
+            raise MathpixClientError(f"Cannot delete PDF: {result.get('error')}")
+        return result
+
+    def conversion_delete(self, conversion_id: str):
+        """Delete a conversion and all associated output files from S3.
+
+        Args:
+            conversion_id: The conversion ID to delete.
+
+        Returns:
+            dict: Final status info for the conversion.
+        """
+        endpoint = urljoin(self.auth.api_url, f'v3/converter/{conversion_id}')
+        response = requests.delete(endpoint, headers=self.auth.headers, **self.request_options)
+        result = response.json()
+        if response.status_code == 404:
+            raise MathpixClientError(f"Conversion not found: {conversion_id}")
+        if 'error' in result:
+            raise MathpixClientError(f"Cannot delete conversion: {result.get('error')}")
+        return result
+
     def file_batch_new(self):
         """Creates a new file batch ID that can be used to group multiple file uploads.
 
@@ -615,3 +662,706 @@ class MathpixClient:
             if response_json:
                 logger.error(f"Conversion failed: {response_json}")
             raise MathpixClientError(f"Mathpix conversion request failed: {e}")
+
+    def scs_file_new(
+            self,
+            file_path: Optional[str] = None,
+            url: Optional[str] = None,
+            source_s3_uri: Optional[str] = None,
+            filename: Optional[str] = None,
+            scs_job_id: Optional[str] = None,
+            conversion_formats: Optional[Dict[str, bool]] = None,
+            conversion_options: Optional[Dict[str, object]] = None,
+            destination_s3_uri: Optional[str] = None,
+            destination_basename: Optional[str] = None,
+            s3_region: Optional[str] = None,
+            image_output_mode: Optional[str] = None,
+            include_page_info: Optional[bool] = None,
+            metadata: Optional[Dict[str, object]] = None,
+            alphabets_allowed: Optional[Dict[str, str]] = None,
+            rm_spaces: Optional[bool] = True,
+            rm_fonts: Optional[bool] = False,
+            idiomatic_eqn_arrays: Optional[bool] = False,
+            include_equation_tags: Optional[bool] = False,
+            include_smiles: Optional[bool] = True,
+            include_chemistry_as_image: Optional[bool] = False,
+            include_diagram_text: Optional[bool] = False,
+            numbers_default_to_math: Optional[bool] = False,
+            math_inline_delimiters: Optional[Tuple[str, str]] = None,
+            math_display_delimiters: Optional[Tuple[str, str]] = None,
+            page_ranges: Optional[str] = None,
+            enable_spell_check: Optional[bool] = False,
+            auto_number_sections: Optional[bool] = False,
+            remove_section_numbering: Optional[bool] = False,
+            preserve_section_numbering: Optional[bool] = True,
+            enable_tables_fallback: Optional[bool] = False,
+            fullwidth_punctuation: Optional[bool] = None,
+    ):
+        """Upload a file via files-api v1 for async processing.
+
+        Supports three upload modes (exactly one must be provided):
+        - file_path: Multipart upload from local file
+        - url: Upload from HTTP URL or S3 presigned URL
+        - source_s3_uri: Copy from S3 bucket (requires IAM role access)
+
+        Args:
+            file_path: Path to a local file to upload.
+            url: URL of a remote file (HTTP/HTTPS or S3 presigned URL).
+            source_s3_uri: S3 URI (s3://bucket/key) to copy from.
+            filename: Optional filename to use (defaults to file basename).
+            scs_job_id: Optional job ID to group files together.
+            conversion_formats: Dict of format names to enable (e.g., {'mmd': True, 'docx': True}).
+            conversion_options: Additional conversion options dict.
+            destination_s3_uri: Optional S3 URI to write output files.
+            destination_basename: Optional basename for output files (defaults to file_id).
+            s3_region: Optional AWS region for S3 operations (default us-east-1).
+            image_output_mode: Image output mode (e.g., 'local' to upload to destination_s3_uri).
+            include_page_info: Include page info in output (default None).
+            metadata: Optional dict to attach metadata to the request.
+            alphabets_allowed: Optional dict to list alphabets allowed in the output.
+            rm_spaces: Remove extra white space from equations (default True).
+            rm_fonts: Remove font commands from equations (default False).
+            idiomatic_eqn_arrays: Use aligned/gathered/cases instead of array (default False).
+            include_equation_tags: Include equation number tags in LaTeX (default False).
+            include_smiles: Enable chemistry diagram OCR via SMILES (default True).
+            include_chemistry_as_image: Return image crop for chemical diagrams (default False).
+            include_diagram_text: Enable text extraction from diagrams (default False).
+            numbers_default_to_math: Numbers are always math (default False).
+            math_inline_delimiters: Tuple of (begin, end) delimiters for inline math.
+            math_display_delimiters: Tuple of (begin, end) delimiters for display math.
+            page_ranges: Page range string (e.g., "2,4-6" or "2--2").
+            enable_spell_check: Enable predictive mode for English handwriting (default False).
+            auto_number_sections: Auto-number sections (default False).
+            remove_section_numbering: Remove existing section numbering (default False).
+            preserve_section_numbering: Keep existing section numbering (default True).
+            enable_tables_fallback: Enable advanced table processing (default False).
+            fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
+
+        Raises:
+            ValidationError: If not exactly one of file_path, url, or source_s3_uri is provided.
+            FileNotFoundError: If the specified file_path does not exist.
+            MathpixClientError: If the API request fails.
+        """
+        source_count = sum(x is not None for x in [file_path, url, source_s3_uri])
+        if source_count != 1:
+            logger.error("Invalid parameters: Exactly one of file_path, url, or source_s3_uri must be provided")
+            raise ValidationError("Exactly one of file_path, url, or source_s3_uri must be provided")
+        options: Dict[str, object] = {}
+        _metadata: Dict[str, object] = {"mpxpy": True}
+        if metadata:
+            _metadata.update(metadata)
+        options["metadata"] = _metadata
+        if conversion_formats:
+            options["conversion_formats"] = conversion_formats
+        if scs_job_id:
+            options["scs_job_id"] = scs_job_id
+        if destination_s3_uri:
+            options["destination_s3_uri"] = destination_s3_uri
+        if destination_basename:
+            options["destination_basename"] = destination_basename
+        if s3_region:
+            options["s3_region"] = s3_region
+        if image_output_mode:
+            options["image_output_mode"] = image_output_mode
+        if include_page_info is not None:
+            options["include_page_info"] = include_page_info
+        if alphabets_allowed is not None:
+            options["alphabets_allowed"] = alphabets_allowed
+        if not rm_spaces:
+            options["rm_spaces"] = rm_spaces
+        if rm_fonts:
+            options["rm_fonts"] = rm_fonts
+        if idiomatic_eqn_arrays:
+            options["idiomatic_eqn_arrays"] = idiomatic_eqn_arrays
+        if include_equation_tags:
+            options["include_equation_tags"] = True
+        if not include_smiles:
+            options["include_smiles"] = include_smiles
+        if include_chemistry_as_image:
+            options["include_chemistry_as_image"] = True
+        if include_diagram_text:
+            options["include_diagram_text"] = include_diagram_text
+        if numbers_default_to_math:
+            options["numbers_default_to_math"] = numbers_default_to_math
+        if math_inline_delimiters is not None:
+            options["math_inline_delimiters"] = math_inline_delimiters
+        if math_display_delimiters is not None:
+            options["math_display_delimiters"] = math_display_delimiters
+        if page_ranges is not None:
+            options["page_ranges"] = page_ranges
+        if enable_spell_check:
+            options["enable_spell_check"] = enable_spell_check
+        if auto_number_sections:
+            options["auto_number_sections"] = auto_number_sections
+        if remove_section_numbering:
+            options["remove_section_numbering"] = remove_section_numbering
+        if not preserve_section_numbering:
+            options["preserve_section_numbering"] = preserve_section_numbering
+        if enable_tables_fallback:
+            options["enable_tables_fallback"] = enable_tables_fallback
+        if fullwidth_punctuation:
+            options["fullwidth_punctuation"] = fullwidth_punctuation
+        if conversion_options:
+            options.update(conversion_options)
+        if file_path:
+            logger.debug(f"Creating new file via files-api: path={file_path}")
+            path = Path(file_path)
+            if not path.is_file():
+                logger.error(f"File not found: {file_path}")
+                raise FileNotFoundError(f"File path not found: {file_path}")
+            endpoint = urljoin(self.auth.files_api_url, '/files/v1')
+            data = {"options_json": json.dumps(options)}
+            # For files/v1 multipart, filename and scs_job_id are form fields (not in options_json)
+            if filename:
+                data["filename"] = filename
+            if scs_job_id:
+                data["scs_job_id"] = scs_job_id
+            with path.open("rb") as f:
+                files = {"file": f}
+                try:
+                    response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
+                    response.raise_for_status()
+                    response_json = response.json()
+                    file_id = response_json['file_id']
+                    logger.debug(f"File upload started, file_id: {file_id}")
+                    return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+                except requests.exceptions.RequestException as e:
+                    raise MathpixClientError(f"Mathpix files-api request failed: {e}")
+        elif url:
+            logger.debug(f"Creating new file via files-api: url={url}")
+            endpoint = urljoin(self.auth.files_api_url, '/files/v1/url')
+            options["url"] = url
+            if filename:
+                options["filename"] = filename
+            try:
+                response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
+                response.raise_for_status()
+                response_json = response.json()
+                file_id = response_json['file_id']
+                logger.debug(f"File from URL started, file_id: {file_id}")
+                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+            except requests.exceptions.RequestException as e:
+                raise MathpixClientError(f"Mathpix files-api request failed: {e}")
+        else:
+            logger.debug(f"Creating new file via files-api: source_s3_uri={source_s3_uri}")
+            endpoint = urljoin(self.auth.files_api_url, '/files/v1/s3')
+            options["source_s3_uri"] = source_s3_uri
+            if filename:
+                options["filename"] = filename
+            try:
+                response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
+                response.raise_for_status()
+                response_json = response.json()
+                file_id = response_json['file_id']
+                logger.debug(f"File from S3 started, file_id: {file_id}")
+                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+            except requests.exceptions.RequestException as e:
+                raise MathpixClientError(f"Mathpix files-api request failed: {e}")
+
+    def list_scs_files(
+            self,
+            scs_job_id: Optional[str] = None,
+            filename: Optional[str] = None,
+            limit: int = 100,
+            paging_state: Optional[str] = None,
+    ):
+        """List files from files-api v1.
+
+        Requires exactly one filter: scs_job_id or filename.
+
+        Args:
+            scs_job_id: Filter by job ID.
+            filename: Filter by filename.
+            limit: Maximum number of results (default 100).
+            paging_state: Optional paging state for pagination.
+
+        Returns:
+            dict: Response containing 'file_ids' list and 'next_page_token' for pagination.
+        """
+        logger.debug("Listing files from files-api")
+        endpoint = urljoin(self.auth.files_api_url, '/files/v1/list')
+        params: Dict[str, object] = {"limit": limit}
+        if scs_job_id:
+            params["scs_job_id"] = scs_job_id
+        if filename:
+            params["filename"] = filename
+        if paging_state:
+            params["paging_state"] = paging_state
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api list request failed: {e}")
+
+    def list_scs_jobs(
+            self,
+            start: Optional[str] = None,
+            end: Optional[str] = None,
+            limit: int = 100,
+            paging_state: Optional[str] = None,
+    ):
+        """List SCS jobs from files-api v1.
+
+        Args:
+            start: Optional start date filter (ISO format).
+            end: Optional end date filter (ISO format).
+            limit: Maximum number of results (default 100).
+            paging_state: Optional paging state for pagination.
+
+        Returns:
+            dict: Response containing 'jobs' list and optionally 'paging_state' for next page.
+        """
+        logger.debug("Listing jobs from files-api")
+        endpoint = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs')
+        params: Dict[str, object] = {"limit": limit}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if paging_state:
+            params["paging_state"] = paging_state
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api list jobs request failed: {e}")
+
+    def scs_job_status(self, scs_job_id: str):
+        """Get the current status of an SCS job.
+
+        Args:
+            scs_job_id: The job ID to get status for.
+
+        Returns:
+            JSON response containing job status information.
+        """
+        logger.debug(f"Getting status for SCS job {scs_job_id}")
+        endpoint = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs/status')
+        params = {'scs_job_id': scs_job_id}
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api job status request failed: {e}")
+
+    def query_usage(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            usage_type: Optional[str] = None,
+            request_args_hash: Optional[str] = None,
+            timespan: Optional[str] = None,
+            group_by: Optional[List[str]] = None,
+            page: int = 1,
+            per_page: int = 100,
+    ):
+        """Query API usage statistics.
+
+        Args:
+            from_date: Start date for usage query (ISO 8601 format).
+            to_date: End date for usage query (ISO 8601 format).
+            app_id: Filter by application ID.
+            usage_type: Filter by usage type (e.g., 'image', 'pdf-page', 'strokes-session').
+            request_args_hash: Filter by request args hash.
+            timespan: Aggregation period ('hour', 'day', 'month', 'year').
+            group_by: Fields to group by (['app_id', 'usage_type', 'request_args_hash']).
+            page: Page number (1-100, default 1).
+            per_page: Results per page (1-1000, default 100).
+
+        Returns:
+            dict: Response with 'ocr_usage' list containing usage records.
+        """
+        logger.debug("Querying usage statistics")
+        endpoint = urljoin(self.auth.api_url, 'v3/ocr-usage')
+        params: Dict[str, object] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        if usage_type:
+            params['usage_type'] = usage_type
+        if request_args_hash:
+            params['request_args_hash'] = request_args_hash
+        if timespan:
+            params['timespan'] = timespan
+        if group_by:
+            params['group_by'] = group_by
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix usage query failed: {e}")
+
+    def query_ocr_results(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            request_id: Optional[str] = None,
+            pdf_id: Optional[str] = None,
+            tags: Optional[List[str]] = None,
+            include_null_results: bool = False,
+            page: int = 1,
+            per_page: int = 100,
+            contains_chemistry: Optional[bool] = None,
+            contains_diagram: Optional[bool] = None,
+            is_handwritten: Optional[bool] = None,
+            is_printed: Optional[bool] = None,
+            contains_table: Optional[bool] = None,
+            contains_triangle: Optional[bool] = None,
+            contains_algorithm: Optional[bool] = None,
+    ):
+        """Query historical OCR results.
+
+        Args:
+            from_date: Start date for results query (ISO 8601 format).
+            to_date: End date for results query (ISO 8601 format).
+            app_id: Filter by application ID.
+            request_id: Filter by image request ID.
+            pdf_id: Filter by PDF ID.
+            tags: Filter by tags (JSONB containment filter).
+            include_null_results: Include results where result is null (default False).
+            page: Page number (1-100, default 1).
+            per_page: Results per page (1-1000, default 100).
+            contains_chemistry: Filter by chemistry content detection.
+            contains_diagram: Filter by diagram content detection.
+            is_handwritten: Filter by handwritten content detection.
+            is_printed: Filter by printed content detection.
+            contains_table: Filter by table content detection.
+            contains_triangle: Filter by triangle content detection.
+            contains_algorithm: Filter by algorithm content detection.
+
+        Returns:
+            dict: Response with 'ocr_results' list.
+        """
+        logger.debug("Querying OCR results")
+        endpoint = urljoin(self.auth.api_url, 'v3/ocr-results')
+        params: Dict[str, object] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        if request_id:
+            params['request_id'] = request_id
+        if pdf_id:
+            params['pdf_id'] = pdf_id
+        if tags:
+            params['tags'] = tags
+        if include_null_results:
+            params['include_null_results'] = include_null_results
+        if contains_chemistry is not None:
+            params['contains_chemistry'] = contains_chemistry
+        if contains_diagram is not None:
+            params['contains_diagram'] = contains_diagram
+        if is_handwritten is not None:
+            params['is_handwritten'] = is_handwritten
+        if is_printed is not None:
+            params['is_printed'] = is_printed
+        if contains_table is not None:
+            params['contains_table'] = contains_table
+        if contains_triangle is not None:
+            params['contains_triangle'] = contains_triangle
+        if contains_algorithm is not None:
+            params['contains_algorithm'] = contains_algorithm
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix OCR results query failed: {e}")
+
+    def query_pdf_results(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            pdf_id: Optional[str] = None,
+            page: int = 1,
+            per_page: int = 100,
+    ):
+        """Query historical PDF results.
+
+        Args:
+            from_date: Start date for results query (ISO 8601 format).
+            to_date: End date for results query (ISO 8601 format).
+            app_id: Filter by application ID.
+            pdf_id: Filter by PDF ID.
+            page: Page number (1-1000, default 1).
+            per_page: Results per page (1-100, default 100).
+
+        Returns:
+            dict: Response with 'pdfs' list.
+        """
+        logger.debug("Querying PDF results")
+        endpoint = urljoin(self.auth.api_url, 'v3/pdf-results')
+        params: Dict[str, Any] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        if pdf_id:
+            params['pdf_id'] = pdf_id
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix PDF results query failed: {e}")
+
+    def query_converter_results(
+            self,
+            from_date: Optional[str] = None,
+            to_date: Optional[str] = None,
+            app_id: Optional[str] = None,
+            page: int = 1,
+            per_page: int = 100,
+    ):
+        """Query historical converter results.
+
+        Args:
+            from_date: Start date for results query (ISO 8601 format).
+            to_date: End date for results query (ISO 8601 format).
+            app_id: Filter by application ID.
+            page: Page number (1-1000, default 1).
+            per_page: Results per page (1-100, default 100).
+
+        Returns:
+            dict: Response with 'documents' list containing conversion results.
+                Each document has: id, input_file, status, created_at, modified_at, request_args.
+        """
+        logger.debug("Querying converter results")
+        endpoint = urljoin(self.auth.api_url, 'v3/converter-results')
+        params: Dict[str, Any] = {'page': page, 'per_page': per_page}
+        if from_date:
+            params['from_date'] = from_date
+        if to_date:
+            params['to_date'] = to_date
+        if app_id:
+            params['app_id'] = app_id
+        try:
+            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix converter results query failed: {e}")
+
+    def strokes_new(
+            self,
+            strokes: Dict[str, List[List[int]]],
+            strokes_session_id: Optional[str] = None,
+    ):
+        """Recognize handwritten strokes.
+
+        Args:
+            strokes: Dict with 'x' and 'y' keys, each containing list of strokes.
+                Example: {"x": [[33, 34, 36], [65, 64]], "y": [[188, 190, 194], [192, 194]]}
+            strokes_session_id: Optional session ID for incremental stroke submission.
+
+        Returns:
+            dict: API response with latex, text, confidence, etc.
+        """
+        if 'x' not in strokes or 'y' not in strokes:
+            raise ValidationError("Strokes must contain 'x' and 'y' keys")
+        if not strokes['x'] or not strokes['y']:
+            raise ValidationError("Strokes 'x' and 'y' must be non-empty lists")
+        if len(strokes['x']) != len(strokes['y']):
+            raise ValidationError("Strokes 'x' and 'y' must have the same number of strokes")
+        for i, (x_stroke, y_stroke) in enumerate(zip(strokes['x'], strokes['y'])):
+            if len(x_stroke) != len(y_stroke):
+                raise ValidationError(f"Stroke {i}: x and y must have the same number of points")
+            if len(x_stroke) == 0:
+                raise ValidationError(f"Stroke {i}: cannot be empty")
+        endpoint = urljoin(self.auth.api_url, 'v3/strokes')
+        body: Dict[str, Any] = {"strokes": {"strokes": strokes}}
+        if strokes_session_id:
+            body["strokes_session_id"] = strokes_session_id
+        try:
+            response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix strokes request failed: {e}")
+
+    def app_token_new(
+            self,
+            expires: Optional[int] = None,
+            include_strokes_session_id: bool = False,
+            user_id: Optional[str] = None,
+    ):
+        """Create a new app token.
+
+        App tokens are short-lived tokens for client-side authentication.
+        They can optionally include a strokes session ID for incremental
+        handwriting recognition.
+
+        Args:
+            expires: Token expiration in seconds (30-43200, default 300).
+                If include_strokes_session_id is True, max is 300.
+            include_strokes_session_id: If True, creates a strokes session
+                and returns strokes_session_id. Max expiration becomes 300s.
+            user_id: Optional user ID to associate with this token.
+
+        Returns:
+            dict: Response containing:
+                - app_token: The generated token string
+                - app_token_expires_at: Expiration timestamp (ms since epoch)
+                - strokes_session_id: Session ID (only if include_strokes_session_id=True)
+
+        Raises:
+            MathpixClientError: If the API request fails.
+        """
+        logger.debug("Creating new app token")
+        endpoint = urljoin(self.auth.api_url, 'v3/app-tokens')
+        body: Dict[str, Any] = {}
+        if expires is not None:
+            body['expires'] = expires
+        if include_strokes_session_id:
+            body['include_strokes_session_id'] = True
+        if user_id is not None:
+            body['user_id'] = user_id
+        try:
+            response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Failed to create app token: {e}")
+
+    def app_token_get(self, app_token: str):
+        """Get information about an app token.
+
+        Args:
+            app_token: The app token to query.
+
+        Returns:
+            dict: Response containing:
+                - app_token: The token string
+                - app_token_expires_at: Expiration timestamp (ms since epoch)
+                - app_id: Application ID
+                - group_id: Group ID
+                - user_id: User ID
+
+        Raises:
+            MathpixClientError: If the API request fails or token not found.
+        """
+        logger.debug(f"Getting app token info: {app_token[:20]}...")
+        endpoint = urljoin(self.auth.api_url, f'v3/app-tokens/{app_token}')
+        try:
+            response = get(endpoint, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Failed to get app token: {e}")
+
+    def app_token_delete(self, app_token: str):
+        """Delete an app token.
+
+        Args:
+            app_token: The app token to delete.
+
+        Returns:
+            dict: Response containing:
+                - app_token: The deleted token string
+                - app_id: Application ID
+                - group_id: Group ID
+                - user_id: User ID
+
+        Raises:
+            MathpixClientError: If the API request fails or token not found.
+        """
+        logger.debug(f"Deleting app token: {app_token[:20]}...")
+        endpoint = urljoin(self.auth.api_url, f'v3/app-tokens/{app_token}')
+        try:
+            response = requests.delete(endpoint, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Failed to delete app token: {e}")
+
+    def batch_new(
+            self,
+            urls: Dict[str, Any],
+            ocr_behavior: str = "latex",
+            callback: Optional[Dict[str, Any]] = None,
+            metadata: Optional[Dict[str, Any]] = None,
+            formats: Optional[List[str]] = None,
+            data_options: Optional[Dict[str, Any]] = None,
+            include_detected_alphabets: bool = False,
+            alphabets_allowed: Optional[Dict[str, str]] = None,
+            confidence_threshold: Optional[float] = None,
+            confidence_rate_threshold: Optional[float] = None,
+    ) -> Batch:
+        """Submit multiple images for batch processing.
+
+        Args:
+            urls: Dict mapping keys to image sources. Values can be:
+                - String URL: "https://example.com/image.jpg"
+                - Data URL: "data:image/jpg;base64,..."
+                - Object with options: {"url": "...", "formats": [...], "region": {...}}
+            ocr_behavior: Processing mode - "latex" (default) or "text".
+            callback: Optional callback configuration for async notification.
+                Example: {"post": "https://...", "reply": {}, "body": {}, "headers": {}}
+            metadata: Optional metadata dict to attach to the request.
+            formats: Optional list of output formats (applies to all items unless overridden).
+            data_options: Optional DataOptions dict for text mode.
+            include_detected_alphabets: Return detected alphabets in results.
+            alphabets_allowed: Dict specifying allowed alphabets.
+            confidence_threshold: File-level confidence threshold (0-1).
+            confidence_rate_threshold: Symbol-level confidence threshold (0-1).
+
+        Returns:
+            Batch: A Batch instance for tracking progress and retrieving results.
+
+        Raises:
+            ValidationError: If urls is empty or invalid.
+            MathpixClientError: If the API request fails.
+        """
+        if not urls:
+            raise ValidationError("urls dict must not be empty")
+        logger.debug(f"Submitting batch with {len(urls)} images")
+        endpoint = urljoin(self.auth.api_url, 'v3/batch')
+        body: Dict[str, Any] = {
+            "urls": urls,
+            "ocr_behavior": ocr_behavior,
+        }
+        if callback:
+            body["callback"] = callback
+        if metadata:
+            body["metadata"] = metadata
+        if formats:
+            body["formats"] = formats
+        if data_options:
+            body["data_options"] = data_options
+        if include_detected_alphabets:
+            body["include_detected_alphabets"] = include_detected_alphabets
+        if alphabets_allowed:
+            body["alphabets_allowed"] = alphabets_allowed
+        if confidence_threshold is not None:
+            body["confidence_threshold"] = confidence_threshold
+        if confidence_rate_threshold is not None:
+            body["confidence_rate_threshold"] = confidence_rate_threshold
+        if not self.improve_mathpix:
+            if "metadata" not in body:
+                body["metadata"] = {}
+            body["metadata"]["improve_mathpix"] = False
+        try:
+            response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            response.raise_for_status()
+            result = response.json()
+            batch_id = result.get('batch_id')
+            if not batch_id:
+                raise MathpixClientError(f"No batch_id in response: {result}")
+            logger.debug(f"Batch created with ID: {batch_id}")
+            return Batch(auth=self.auth, batch_id=batch_id, request_options=self.request_options)
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix batch request failed: {e}")

@@ -1,9 +1,10 @@
 import requests
 from mpxpy.errors import MathpixClientError
 from mpxpy.logger import logger
+from typing import Any
 
 
-def make_request(method, url, **kwargs):
+def make_request(method: str, url: str, **kwargs: Any):
     """
     Make an HTTP request with standardized error handling.
 
@@ -39,17 +40,17 @@ def make_request(method, url, **kwargs):
         raise MathpixClientError(error_msg)
 
 
-def get(url, **kwargs):
+def get(url: str, **kwargs: Any):
     return make_request('GET', url, **kwargs)
 
 
-def post(url, **kwargs):
+def post(url: str, **kwargs: Any):
     return make_request('POST', url, **kwargs)
 
 
-def put(url, **kwargs):
+def put(url: str, **kwargs: Any):
     return make_request('PUT', url, **kwargs)
 
 
-def delete(url, **kwargs):
+def delete(url: str, **kwargs: Any):
     return make_request('DELETE', url, **kwargs)
