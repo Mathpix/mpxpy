@@ -112,17 +112,16 @@ def test_pdf_get_result_docx(client: MathpixClient):
 
 
 def test_pdf_download_output_without_explicit_wait(client: MathpixClient):
-    """Test that requesting output without explicit wait_until_complete() still works.
+    """Test that requesting output after waiting for PDF (but not conversion) works.
 
-    The API now waits for conversion to complete before returning the result,
-    so we don't need to explicitly poll for completion.
+    We wait for PDF processing to complete, then request the markdown output.
     """
     pdf_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/bitcoin-7.pdf"
     pdf = client.pdf_new(
         url=pdf_file_url,
         convert_to_md=True
     )
-    # API should wait for conversion and return result (no explicit wait needed)
+    assert pdf.wait_until_complete(timeout=60)
     md_output = pdf.to_md_text()
     assert md_output is not None
     assert isinstance(md_output, str), f"Expected md output to be a string, got {type(md_output)}"
