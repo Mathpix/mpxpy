@@ -394,85 +394,161 @@ Deletes an app token.
 
 - `app_token`: The app token to delete.
 
-##### `MathpixClient.scs_file_new`
+#### Files API (async document processing)
 
-Upload a file via files-api v1 for async processing. Returns an ScsFile instance.
+The Files API processes documents asynchronously from remote URIs — `s3://`, `gs://`, public `https://`, or Azure Blob HTTPS URLs — one at a time or up to 200,000 in a single batch call. Non-public sources require a registered [data source](https://docs.mathpix.com/reference/files-v1-data-sources) connecting your Mathpix account to the bucket; register it once via the API following the linked guide.
 
-Supports three upload modes (exactly one must be provided):
+Submit a single document and download the result:
 
-- `file_path`: Multipart upload from local file
-- `url`: Upload from HTTP URL or S3 presigned URL
-- `source_s3_uri`: Copy from S3 bucket (requires IAM role access)
+```python
+from mpxpy.mathpix_client import MathpixClient
 
-###### `MathpixClient.scs_file_new` Arguments
+client = MathpixClient()
+file = client.file_new(
+    source_uri="https://cdn.mathpix.com/examples/cs229-notes1.pdf",
+    conversion_formats={"docx": True, "md": True},
+)
+file.wait_until_complete(timeout=120)
+markdown = file.to_md_text()
+file.to_docx_file("output.docx")
+```
 
-- `file_path`: Path to a local file to upload.
-- `url`: URL of a remote file (HTTP/HTTPS or S3 presigned URL).
-- `source_s3_uri`: S3 URI (s3://bucket/key) to copy from.
-- `filename`: Optional filename to use (defaults to file basename).
-- `scs_job_id`: Optional job ID to group files together.
-- `conversion_formats`: Dict of format names to enable (e.g., `{'mmd': True, 'docx': True}`).
-- `conversion_options`: Additional conversion options dict.
-- `destination_s3_uri`: Optional S3 URI to write output files.
-- `destination_basename`: Optional basename for output files (defaults to file_id).
-- `s3_region`: Optional AWS region for S3 operations (default us-east-1).
-- `image_output_mode`: Image output mode (e.g., 'local' to upload to destination_s3_uri).
-- `include_page_info`: Include page info in output (default None).
+Submit a batch as a job, then collect results and failures:
+
+```python
+job = client.file_job_new(
+    files=[
+        {"source_uri": "s3://your-bucket/docs/contract-1.pdf", "custom_id": "contract-1"},
+        {"source_uri": "https://example.com/manual.pdf", "custom_id": "manual"},
+    ],
+    job_id="contracts-2026-07",
+    conversion_formats={"docx": True, "md": True},
+)
+job.wait_until_complete(timeout=3600, interval=15.0)
+for errored in job.files_iter(status="error"):
+    print("failed:", errored["custom_id"])
+file = job.file_by_custom_id("contract-1")
+```
+
+Batch submission is accept-and-defer: the call returns immediately and per-item failures (bad URIs, missing data sources) surface as per-file `error` statuses when you poll the job, not as request errors.
+
+##### `MathpixClient.file_new`
+
+Submit a single document by remote URI for async processing (`POST /files/v1/uri`). Returns a `File` instance.
+
+###### `MathpixClient.file_new` Arguments
+
+- `source_uri`: Remote location of the source document (`s3://`, `gs://`, public `https://`, or Azure Blob HTTPS URL). Required.
+- `job_id`: Optional job to associate this file with. Required whenever `custom_id` is supplied.
+- `custom_id`: Optional customer-supplied identifier (max 256 chars, `[A-Za-z0-9_-.:]`). `(job_id, custom_id)` is the idempotency key: re-submitting the same pair returns the original file.
+- `idempotency_key`: Optional client-generated key sent as the `Idempotency-Key` header; makes a standalone submission safe to retry.
+- `conversion_formats`: Dict of format names to enable (e.g., `{'docx': True, 'md': True}`). Mathpix Markdown (`mmd`) is always produced.
+- `conversion_options`: Additional request options dict.
+- `destination_uri`: Optional destination for results; must be backed by a registered data source. When omitted, results stay in Mathpix storage and are fetched via the download helpers.
+- `destination_basename`: Optional basename for output objects (defaults to the file_id).
+- `image_output_mode`: Set to `'local'` to write cropped images into `destination_uri` storage instead of the Mathpix CDN.
 - `metadata`: Optional dict to attach metadata to the request.
-- `alphabets_allowed`: Optional dict to list alphabets allowed in the output.
-- `rm_spaces`: Remove extra white space from equations (default True).
-- `rm_fonts`: Remove font commands from equations (default False).
-- `idiomatic_eqn_arrays`: Use aligned/gathered/cases instead of array (default False).
-- `include_equation_tags`: Include equation number tags in LaTeX (default False).
-- `include_smiles`: Enable chemistry diagram OCR via SMILES (default True).
-- `include_chemistry_as_image`: Return image crop for chemical diagrams (default False).
-- `include_diagram_text`: Enable text extraction from diagrams (default False).
-- `numbers_default_to_math`: Numbers are always math (default False).
-- `math_inline_delimiters`: Tuple of (begin, end) delimiters for inline math.
-- `math_display_delimiters`: Tuple of (begin, end) delimiters for display math.
-- `page_ranges`: Page range string (e.g., "2,4-6" or "2--2").
-- `enable_spell_check`: Enable predictive mode for English handwriting (default False).
-- `auto_number_sections`: Auto-number sections (default False).
-- `remove_section_numbering`: Remove existing section numbering (default False).
-- `preserve_section_numbering`: Keep existing section numbering (default True).
-- `enable_tables_fallback`: Enable advanced table processing (default False).
-- `fullwidth_punctuation`: Use fullwidth Unicode punctuation (default None).
+- Plus the same OCR options as `pdf_new` (`alphabets_allowed`, `rm_spaces`, `include_smiles`, `math_inline_delimiters`, `page_ranges`, etc.).
 
-##### `MathpixClient.list_scs_files`
+##### `MathpixClient.file_job_new`
 
-List files from files-api v1. Requires exactly one filter: scs_job_id or filename.
+Submit a batch of up to 200,000 documents in one call. Returns a `FileJob` instance.
 
-###### `MathpixClient.list_scs_files` Arguments
+###### `MathpixClient.file_job_new` Arguments
 
-- `scs_job_id`: Filter by job ID.
-- `filename`: Filter by filename.
-- `limit`: Maximum number of results (default 100).
-- `paging_state`: Optional paging state for pagination.
+- `files`: List of `FileSubmission` instances or dicts. Each item takes `source_uri` (required) plus optional `custom_id`, `filename`, `destination_uri`, `s3_region`, `destination_basename`, and `page_ranges`.
+- `job_id`: Optional caller-supplied job id (server-generated when omitted). Required whenever any item carries a `custom_id`.
+- `idempotency_key`: Optional key making the whole batch safe to retry; honored only when no `job_id` is supplied.
+- `conversion_formats`: Job-wide conversion formats, applied to every file.
+- `image_output_mode`: Job-wide; `'local'` writes cropped images to each file's `destination_uri`.
+- `metadata`: Optional dict to attach metadata to the request.
+- Plus the same OCR options as `pdf_new`, applied to every file in the request.
 
-Returns a dict containing 'file_ids' list and 'next_page_token' for pagination.
+##### `MathpixClient.file_jobs_list`
 
-##### `MathpixClient.list_scs_jobs`
+List submitted jobs, newest first. Returns a dict with `jobs` and `next_page_token`.
 
-List SCS jobs from files-api v1.
+###### `MathpixClient.file_jobs_list` Arguments
 
-###### `MathpixClient.list_scs_jobs` Arguments
+- `start`: Earliest submission date to include, `yyyy-MM-dd` (UTC).
+- `end`: Latest submission date to include, `yyyy-MM-dd` (UTC).
+- `limit`: Maximum jobs per page, 1-1000 (default 100).
+- `paging_state`: Pagination cursor from the previous response's `next_page_token`.
 
-- `start`: Optional start date filter (ISO format).
-- `end`: Optional end date filter (ISO format).
-- `limit`: Maximum number of results (default 100).
-- `paging_state`: Optional paging state for pagination.
+##### `MathpixClient.file_get` / `MathpixClient.file_delete` / `MathpixClient.file_job_get`
 
-Returns a dict containing 'jobs' list and optionally 'paging_state' for next page.
+- `file_get(file_id)`: Returns a `File` handle for an existing file.
+- `file_delete(file_id)`: Permanently removes a file and its results from Mathpix-owned storage. Only files in a terminal state can be deleted; repeat deletes are idempotent.
+- `file_job_get(job_id)`: Returns a `FileJob` handle for an existing job.
 
-##### `MathpixClient.scs_job_status`
+##### `File`
 
-Get the current status of an SCS job.
+Returned by `file_new`, `file_get`, and `FileJob.file_by_custom_id`. Methods:
 
-###### `MathpixClient.scs_job_status` Arguments
+- `status()`: Current status (`pending` | `split` | `completed` | `error`), progress, and per-format conversion statuses. When the status is `error`, the `error` and `error_info` attributes carry the failure details.
+- `wait_until_complete(timeout)`: Poll until processing finishes.
+- `wait_for_format(format, timeout)`: Poll until a specific conversion finishes. Conversions complete independently of the file status and can lag behind it; download a format only after it is ready.
+- `text_result` / `bytes_result` / `json_result` / `save_file`, plus the `to_*` convenience methods (`to_md_text`, `to_docx_bytes`, `to_docx_file`, ...).
+- `delete()`: Permanently remove the file and its results from Mathpix-owned storage.
 
-- `scs_job_id`: The job ID to get status for.
+##### `FileJob`
 
-Returns JSON response containing job status information.
+Returned by `file_job_new` and `file_job_get`. Methods:
+
+- `status()`: Job status and counters (`file_count`, `files_completed`, `files_errored`).
+- `wait_until_complete(timeout, interval=5.0)`: Poll until every file reaches a terminal state. Per-file failures don't fail the job.
+- `files(status=None, limit=None, paging_state=None)`: One page of the job's file listing, optionally filtered to `pending`, `completed`, or `error`.
+- `files_iter(status=None, limit=None)`: Iterate over all files, following pagination.
+- `file_by_custom_id(custom_id)`: Fetch one file by the `(job_id, custom_id)` you supplied at submission.
+
+##### Data sources (cloud storage setup)
+
+Non-public `source_uri`/`destination_uri` buckets (`s3://`, `gs://`, Azure Blob) require a registered **data source**: a pointer from your Mathpix account to a bucket you own, with an access grant. The grant model is keyless — no secrets are uploaded to Mathpix (AWS supports a legacy `access_key` fallback). Set up the cloud-side grant following the [per-provider guides](https://docs.mathpix.com/reference/files-v1-data-sources), then register and verify:
+
+```python
+identities = client.onboarding_identities()  # fetch BEFORE creating grants
+external_id = identities["aws"]["external_id"]  # goes in your IAM trust policy
+
+data_source = client.data_source_new(
+    provider="aws",
+    bucket="your-bucket",
+    auth_method="iam_role",
+    provider_specific_details={
+        "iam_role_arn": "arn:aws:iam::123456789012:role/MathpixReader",
+        "aws_external_id": external_id,
+    },
+    region="us-east-1",
+)
+probe = data_source.test()  # {'result': 'ok', 'checks': {'read': True, 'write': True}, ...}
+```
+
+##### `MathpixClient.onboarding_identities`
+
+Returns the Mathpix identities you grant access to (AWS trust account, Azure app/tenant, GCS impersonator service account) plus your per-group `external_id`. Call it before setting up cloud-side grants; the `external_id` is generated on first call and immutable thereafter.
+
+##### `MathpixClient.data_source_new`
+
+Register a bucket as a data source. Returns a `DataSource` instance.
+
+###### `MathpixClient.data_source_new` Arguments
+
+- `provider`: One of `'aws'`, `'azure'`, `'gcp'`.
+- `bucket`: Bucket / container name.
+- `auth_method`: `'iam_role'` or `'access_key'` (aws), `'azure_ad'` (azure), `'service_account'` (gcp).
+- `provider_specific_details`: Non-secret provider metadata (e.g. `iam_role_arn` + `aws_external_id` for aws/iam_role).
+- `name`: Optional human-readable label.
+- `region`: Bucket region (required for aws `access_key` only).
+- `secret`: Only for aws `access_key` (legacy); rejected for keyless providers.
+- `exist_ok`: When the `(provider, bucket)` pair is already registered, return the existing `DataSource` instead of raising a conflict.
+
+For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to-end. GCS registration verifies bucket control up front, so a successful return already confirms the grant.
+
+##### `MathpixClient.data_sources_list` / `data_source_get` / `data_source_test` / `data_source_delete`
+
+- `data_sources_list()`: List the group's registered data sources (secrets are never returned).
+- `data_source_get(data_source_id)`: Returns a `DataSource` handle.
+- `data_source_test(data_source_id)`: Runs the read/write probe; returns `{'result', 'checks', 'message'}` and does **not** raise on a failed probe — use it to diagnose grant issues after customer-side IAM changes.
+- `data_source_delete(data_source_id)`: Permanently removes the data source. In-flight jobs continue with cached credentials; revoke the cloud-side grant separately for full revocation.
 
 ##### `MathpixClient.query_usage`
 
@@ -677,16 +753,17 @@ Returns a dict with 'documents' list containing conversion results. Each documen
 - `results`: Get the results dict mapping url_key to OCR result for each processed item.
 - `keys`: Get the list of URL keys in this batch.
 
-### `ScsFile`
+### `File`
 
-#### `ScsFile` Properties
+#### `File` Properties
 
 - `auth`: An Auth instance with Mathpix credentials.
 - `file_id`: The unique identifier for this file.
 
-#### `ScsFile` Methods
+#### `File` Methods
 
 - `status`: Get the current status of the file processing (file_id, status, num_pages, num_pages_completed, percent_done, formats).
+- `delete`: Permanently remove the file and its results from Mathpix-owned storage.
 - `wait_until_complete`: Wait for the file processing to complete.
 - `wait_for_format`: Wait for a specific format conversion to complete.
 - `to_mmd_text`: Get the processed file result as Mathpix Markdown string.
@@ -714,7 +791,6 @@ Returns a dict with 'documents' list containing conversion results. Each documen
 - `to_pdf_file`: Save the processed file result to a PDF file at a local path.
 - `to_html_file`: Save the processed file result to an HTML file at a local path.
 - `to_tex_zip_file`: Save the processed file result to a tex.zip file at a local path.
-- `cropped_image`: Get a cropped region from a specific page as JPEG bytes.
 
 ## Error Handling
 

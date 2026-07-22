@@ -1,18 +1,92 @@
+import sys
 import json
 import requests
-from typing import Dict, Any, Optional, List, Tuple
+from typing import Dict, Any, Optional, List, Set, Tuple, Union
+if sys.version_info >= (3, 13):
+    from warnings import deprecated
+else:
+    from typing_extensions import deprecated
 from pathlib import Path
 from urllib.parse import urljoin
 from mpxpy.pdf import Pdf
 from mpxpy.image import Image
+from mpxpy.file import File
 from mpxpy.file_batch import FileBatch
+from mpxpy.file_job import FileJob, FileSubmission, CUSTOM_ID_PATTERN, normalize_file_submission
+from mpxpy.data_source import DataSource, PROVIDERS, AUTH_METHODS_BY_PROVIDER
 from mpxpy.conversion import Conversion
-from mpxpy.scs_file import ScsFile
 from mpxpy.batch import Batch
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
-from mpxpy.errors import MathpixClientError, ValidationError
+from mpxpy.errors import MathpixClientError, ValidationError, FilesApiError
 from mpxpy.request_handler import post, get
+
+# Ceiling on items per POST /files/v1/jobs call.
+MAX_JOB_FILES = 200_000
+
+
+def _apply_processing_options(
+        options: Dict[str, Any],
+        alphabets_allowed: Optional[Dict[str, str]] = None,
+        rm_spaces: Optional[bool] = True,
+        rm_fonts: Optional[bool] = False,
+        idiomatic_eqn_arrays: Optional[bool] = False,
+        include_equation_tags: Optional[bool] = False,
+        include_smiles: Optional[bool] = True,
+        include_chemistry_as_image: Optional[bool] = False,
+        include_diagram_text: Optional[bool] = False,
+        numbers_default_to_math: Optional[bool] = False,
+        math_inline_delimiters: Optional[Tuple[str, str]] = None,
+        math_display_delimiters: Optional[Tuple[str, str]] = None,
+        page_ranges: Optional[str] = None,
+        enable_spell_check: Optional[bool] = False,
+        auto_number_sections: Optional[bool] = False,
+        remove_section_numbering: Optional[bool] = False,
+        preserve_section_numbering: Optional[bool] = True,
+        enable_tables_fallback: Optional[bool] = False,
+        fullwidth_punctuation: Optional[bool] = None,
+) -> None:
+    """Apply the OCR/conversion options shared with v3/pdf to a request options dict.
+
+    Only non-default values are added, matching the request shape used across
+    the client.
+    """
+    if alphabets_allowed is not None:
+        options["alphabets_allowed"] = alphabets_allowed
+    if not rm_spaces:
+        options["rm_spaces"] = rm_spaces
+    if rm_fonts:
+        options["rm_fonts"] = rm_fonts
+    if idiomatic_eqn_arrays:
+        options["idiomatic_eqn_arrays"] = idiomatic_eqn_arrays
+    if include_equation_tags:
+        options["include_equation_tags"] = True
+    if not include_smiles:
+        options["include_smiles"] = include_smiles
+    if include_chemistry_as_image:
+        options["include_chemistry_as_image"] = True
+    if include_diagram_text:
+        options["include_diagram_text"] = include_diagram_text
+    if numbers_default_to_math:
+        options["numbers_default_to_math"] = numbers_default_to_math
+    if math_inline_delimiters is not None:
+        options["math_inline_delimiters"] = math_inline_delimiters
+    if math_display_delimiters is not None:
+        options["math_display_delimiters"] = math_display_delimiters
+    if page_ranges is not None:
+        options["page_ranges"] = page_ranges
+    if enable_spell_check:
+        options["enable_spell_check"] = enable_spell_check
+    if auto_number_sections:
+        options["auto_number_sections"] = auto_number_sections
+    if remove_section_numbering:
+        options["remove_section_numbering"] = remove_section_numbering
+    if not preserve_section_numbering:
+        options["preserve_section_numbering"] = preserve_section_numbering
+    if enable_tables_fallback:
+        options["enable_tables_fallback"] = enable_tables_fallback
+    if fullwidth_punctuation:
+        options["fullwidth_punctuation"] = fullwidth_punctuation
 
 
 class MathpixClient:
@@ -87,7 +161,7 @@ class MathpixClient:
             enable_tables_fallback: Optional[bool] = False,
             fullwidth_punctuation: Optional[bool] = None
     ):
-        """Process an image either from a local file or remote URL.
+        r"""Process an image either from a local file or remote URL.
 
         Args:
             file_path: Path to a local image file.
@@ -135,7 +209,7 @@ class MathpixClient:
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
         endpoint = urljoin(self.auth.api_url, 'v3/text')
-        image_options = {
+        image_options: Dict[str, Any] = {
             "metadata": {
                 "mpxpy": True,
                 **(metadata or {})
@@ -285,7 +359,7 @@ class MathpixClient:
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
     ) -> Pdf:
-        """Uploads a PDF, document, or ebook from a local file or remote URL and optionally requests conversions.
+        r"""Uploads a PDF, document, or ebook from a local file or remote URL and optionally requests conversions.
 
         Args:
             file_path: Path to a local PDF file.
@@ -445,6 +519,7 @@ class MathpixClient:
                 raise FileNotFoundError(f"File path not found: {file_path}")
             with path.open("rb") as pdf_file:
                 files = {"file": pdf_file}
+                response_json = None
                 try:
                     response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
                     response.raise_for_status()
@@ -480,6 +555,7 @@ class MathpixClient:
         else:
             logger.debug(f"Creating new PDF: url={url}")
             options["url"] = url
+            response_json = None
             try:
                 response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
                 response.raise_for_status()
@@ -634,6 +710,7 @@ class MathpixClient:
             options["formats"]['html.zip'] = True
         if len(options['formats'].items()) == 0:
             raise ValidationError("At least one format is required.")
+        response_json = None
         try:
             response = post(endpoint, json=options, headers=self.auth.headers)
             response.raise_for_status()
@@ -663,6 +740,672 @@ class MathpixClient:
                 logger.error(f"Conversion failed: {response_json}")
             raise MathpixClientError(f"Mathpix conversion request failed: {e}")
 
+    def file_new(
+            self,
+            source_uri: str,
+            job_id: Optional[str] = None,
+            custom_id: Optional[str] = None,
+            idempotency_key: Optional[str] = None,
+            conversion_formats: Optional[Dict[str, bool]] = None,
+            conversion_options: Optional[Dict[str, object]] = None,
+            destination_uri: Optional[str] = None,
+            destination_basename: Optional[str] = None,
+            image_output_mode: Optional[str] = None,
+            metadata: Optional[Dict[str, object]] = None,
+            alphabets_allowed: Optional[Dict[str, str]] = None,
+            rm_spaces: Optional[bool] = True,
+            rm_fonts: Optional[bool] = False,
+            idiomatic_eqn_arrays: Optional[bool] = False,
+            include_equation_tags: Optional[bool] = False,
+            include_smiles: Optional[bool] = True,
+            include_chemistry_as_image: Optional[bool] = False,
+            include_diagram_text: Optional[bool] = False,
+            numbers_default_to_math: Optional[bool] = False,
+            math_inline_delimiters: Optional[Tuple[str, str]] = None,
+            math_display_delimiters: Optional[Tuple[str, str]] = None,
+            page_ranges: Optional[str] = None,
+            enable_spell_check: Optional[bool] = False,
+            auto_number_sections: Optional[bool] = False,
+            remove_section_numbering: Optional[bool] = False,
+            preserve_section_numbering: Optional[bool] = True,
+            enable_tables_fallback: Optional[bool] = False,
+            fullwidth_punctuation: Optional[bool] = None,
+    ) -> File:
+        """Submit a single document by remote URI for async processing.
+
+        Submits via POST /files/v1/uri. source_uri may be an s3://, gs://, public
+        https://, or Azure Blob HTTPS URL. Non-public sources require a registered
+        data source for the bucket; see
+        https://docs.mathpix.com/reference/files-v1-data-sources
+
+        Args:
+            source_uri: Remote location of the source document.
+            job_id: Optional job to associate this file with. Required whenever
+                custom_id is supplied.
+            custom_id: Optional customer-supplied identifier (max 256 chars,
+                characters [A-Za-z0-9_-.:], case-sensitive). Requires job_id;
+                (job_id, custom_id) is the idempotency key: re-submitting the same
+                pair returns the original file rather than creating a new one, as
+                long as the original file is still live (pending, split, or
+                completed).
+            idempotency_key: Optional client-generated key sent as the
+                Idempotency-Key header (same constraints as custom_id). Makes a
+                standalone submission safe to retry: re-sending the same request
+                returns the original file_id instead of creating a duplicate. If
+                both a (job_id, custom_id) pair and an idempotency_key are present,
+                the pair takes precedence.
+            conversion_formats: Dict of format names to enable (e.g., {'docx': True,
+                'md': True}). Mathpix Markdown (mmd) is always produced.
+            conversion_options: Additional request options dict, merged into the
+                request body last.
+            destination_uri: Optional destination for results. Same scheme rules as
+                source_uri; must be backed by a registered data source. When omitted,
+                results stay in Mathpix storage and are fetched via the download
+                helpers on File.
+            destination_basename: Optional basename for output objects within
+                destination_uri (defaults to the file_id).
+            image_output_mode: Set to 'local' to write cropped images into
+                destination_uri storage under images/, instead of the Mathpix CDN.
+            metadata: Optional dict to attach metadata to the request.
+            alphabets_allowed: Optional dict to list alphabets allowed in the output.
+            rm_spaces: Remove extra white space from equations (default True).
+            rm_fonts: Remove font commands from equations (default False).
+            idiomatic_eqn_arrays: Use aligned/gathered/cases instead of array (default False).
+            include_equation_tags: Include equation number tags in LaTeX (default False).
+            include_smiles: Enable chemistry diagram OCR via SMILES (default True).
+            include_chemistry_as_image: Return image crop for chemical diagrams (default False).
+            include_diagram_text: Enable text extraction from diagrams (default False).
+            numbers_default_to_math: Numbers are always math (default False).
+            math_inline_delimiters: Tuple of (begin, end) delimiters for inline math.
+            math_display_delimiters: Tuple of (begin, end) delimiters for display math.
+            page_ranges: Page range string (e.g., "2,4-6").
+            enable_spell_check: Enable predictive mode for English handwriting (default False).
+            auto_number_sections: Auto-number sections (default False).
+            remove_section_numbering: Remove existing section numbering (default False).
+            preserve_section_numbering: Keep existing section numbering (default True).
+            enable_tables_fallback: Enable advanced table processing (default False).
+            fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
+
+        Returns:
+            File: A new File instance for polling status and downloading results.
+
+        Raises:
+            ValidationError: If source_uri is empty, custom_id is supplied without
+                job_id, or an identifier fails the charset/length constraint.
+            FilesApiError: If the API rejects the submission.
+            MathpixClientError: If the request fails.
+        """
+        has_source_uri: bool = bool(source_uri)
+        if not has_source_uri:
+            raise ValidationError("source_uri is required")
+        has_custom_id: bool = custom_id is not None
+        if has_custom_id:
+            has_job_id: bool = job_id is not None
+            if not has_job_id:
+                raise ValidationError("custom_id requires an explicit job_id")
+            is_valid_custom_id: bool = CUSTOM_ID_PATTERN.match(custom_id) is not None
+            if not is_valid_custom_id:
+                raise ValidationError("custom_id must be at most 256 characters from [A-Za-z0-9_-.:]")
+        has_idempotency_key: bool = idempotency_key is not None
+        if has_idempotency_key:
+            is_valid_idempotency_key: bool = CUSTOM_ID_PATTERN.match(idempotency_key) is not None
+            if not is_valid_idempotency_key:
+                raise ValidationError("idempotency_key must be at most 256 characters from [A-Za-z0-9_-.:]")
+        options: Dict[str, object] = {
+            "source_uri": source_uri,
+            "metadata": {
+                "mpxpy": True,
+                **(metadata or {})
+            }
+        }
+        if conversion_formats:
+            options["conversion_formats"] = conversion_formats
+        if destination_uri:
+            options["destination_uri"] = destination_uri
+        if destination_basename:
+            options["destination_basename"] = destination_basename
+        if image_output_mode:
+            options["image_output_mode"] = image_output_mode
+        if custom_id:
+            options["custom_id"] = custom_id
+        if job_id:
+            options["job_id"] = job_id
+        _apply_processing_options(
+            options,
+            alphabets_allowed=alphabets_allowed,
+            rm_spaces=rm_spaces,
+            rm_fonts=rm_fonts,
+            idiomatic_eqn_arrays=idiomatic_eqn_arrays,
+            include_equation_tags=include_equation_tags,
+            include_smiles=include_smiles,
+            include_chemistry_as_image=include_chemistry_as_image,
+            include_diagram_text=include_diagram_text,
+            numbers_default_to_math=numbers_default_to_math,
+            math_inline_delimiters=math_inline_delimiters,
+            math_display_delimiters=math_display_delimiters,
+            page_ranges=page_ranges,
+            enable_spell_check=enable_spell_check,
+            auto_number_sections=auto_number_sections,
+            remove_section_numbering=remove_section_numbering,
+            preserve_section_numbering=preserve_section_numbering,
+            enable_tables_fallback=enable_tables_fallback,
+            fullwidth_punctuation=fullwidth_punctuation,
+        )
+        if conversion_options:
+            options.update(conversion_options)
+        logger.debug(f"Creating new file via Files API: source_uri={source_uri}")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/uri')
+        headers: Dict[str, str] = dict(self.auth.headers)
+        if has_idempotency_key:
+            headers['Idempotency-Key'] = idempotency_key
+        try:
+            response: requests.Response = post(endpoint, json=options, headers=headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise FilesApiError.from_response(response)
+            response_json: Dict[str, Any] = response.json()
+            file_id: str = response_json['file_id']
+            logger.debug(f"File from URI started, file_id: {file_id}")
+            return File(auth=self.auth, file_id=file_id, request_options=self.request_options)
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix Files API request failed: {e}")
+
+    def file_job_new(
+            self,
+            files: List[Union[FileSubmission, Dict[str, Any]]],
+            job_id: Optional[str] = None,
+            idempotency_key: Optional[str] = None,
+            conversion_formats: Optional[Dict[str, bool]] = None,
+            conversion_options: Optional[Dict[str, object]] = None,
+            image_output_mode: Optional[str] = None,
+            metadata: Optional[Dict[str, object]] = None,
+            alphabets_allowed: Optional[Dict[str, str]] = None,
+            rm_spaces: Optional[bool] = True,
+            rm_fonts: Optional[bool] = False,
+            idiomatic_eqn_arrays: Optional[bool] = False,
+            include_equation_tags: Optional[bool] = False,
+            include_smiles: Optional[bool] = True,
+            include_chemistry_as_image: Optional[bool] = False,
+            include_diagram_text: Optional[bool] = False,
+            numbers_default_to_math: Optional[bool] = False,
+            math_inline_delimiters: Optional[Tuple[str, str]] = None,
+            math_display_delimiters: Optional[Tuple[str, str]] = None,
+            enable_spell_check: Optional[bool] = False,
+            auto_number_sections: Optional[bool] = False,
+            remove_section_numbering: Optional[bool] = False,
+            preserve_section_numbering: Optional[bool] = True,
+            enable_tables_fallback: Optional[bool] = False,
+            fullwidth_punctuation: Optional[bool] = None,
+    ) -> FileJob:
+        """Submit a batch of documents for async processing in one call.
+
+        Submits up to 200,000 documents via POST /files/v1/jobs. The request is
+        accept-and-defer: it returns immediately with a job_id and file_count,
+        then submits the items in the background. Per-item failures (bad or
+        unsupported source_uri, missing data source) are NOT reported
+        synchronously; each surfaces as that file's error status when you poll
+        the job. Poll FileJob.status() for completion and list failed items with
+        FileJob.files(status='error').
+
+        OCR and conversion options apply to every file in the submitted request.
+        To vary settings across subsets of a larger job, make multiple calls with
+        the same job_id and different options.
+
+        Args:
+            files: List of FileSubmission instances or dicts with the same keys
+                (source_uri required; custom_id, filename, destination_uri,
+                s3_region, destination_basename, page_ranges optional).
+            job_id: Optional caller-supplied job id. If omitted the server
+                generates one. Required whenever any item carries a custom_id.
+            idempotency_key: Optional client-generated key sent as the
+                Idempotency-Key header, making the entire batch submission safe to
+                retry: re-sending the same request returns the original response
+                without re-enqueuing any file. Honored only when no job_id is
+                supplied; an explicit job_id wins and the header is ignored for
+                job derivation.
+            conversion_formats: Job-wide conversion formats, applied to every file
+                (e.g., {'docx': True, 'md': True}).
+            conversion_options: Additional request options dict, merged into the
+                request body last.
+            image_output_mode: Job-wide. Set to 'local' to write cropped images
+                into each file's destination_uri storage. Applies only to files
+                that set a destination_uri.
+            metadata: Optional dict to attach metadata to the request.
+            alphabets_allowed: Optional dict to list alphabets allowed in the output.
+            rm_spaces: Remove extra white space from equations (default True).
+            rm_fonts: Remove font commands from equations (default False).
+            idiomatic_eqn_arrays: Use aligned/gathered/cases instead of array (default False).
+            include_equation_tags: Include equation number tags in LaTeX (default False).
+            include_smiles: Enable chemistry diagram OCR via SMILES (default True).
+            include_chemistry_as_image: Return image crop for chemical diagrams (default False).
+            include_diagram_text: Enable text extraction from diagrams (default False).
+            numbers_default_to_math: Numbers are always math (default False).
+            math_inline_delimiters: Tuple of (begin, end) delimiters for inline math.
+            math_display_delimiters: Tuple of (begin, end) delimiters for display math.
+            enable_spell_check: Enable predictive mode for English handwriting (default False).
+            auto_number_sections: Auto-number sections (default False).
+            remove_section_numbering: Remove existing section numbering (default False).
+            preserve_section_numbering: Keep existing section numbering (default True).
+            enable_tables_fallback: Enable advanced table processing (default False).
+            fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
+
+        Returns:
+            FileJob: A new FileJob instance seeded with the response's job_id and
+            file_count.
+
+        Raises:
+            ValidationError: If files is empty or over the 200,000-item ceiling,
+                an item is malformed or missing source_uri, a custom_id fails the
+                charset/length constraint or is duplicated within the batch, or any
+                custom_id is supplied without an explicit job_id.
+            FilesApiError: If the API rejects the submission.
+            MathpixClientError: If the request fails.
+        """
+        has_files: bool = bool(files)
+        if not has_files:
+            raise ValidationError("files must be a non-empty list")
+        is_over_ceiling: bool = len(files) > MAX_JOB_FILES
+        if is_over_ceiling:
+            raise ValidationError(f"files exceeds the {MAX_JOB_FILES} items-per-call ceiling: {len(files)}")
+        normalized: List[Dict[str, Any]] = [normalize_file_submission(item) for item in files]
+        has_explicit_job_id: bool = job_id is not None
+        seen_custom_ids: Set[str] = set()
+        for submission in normalized:
+            item_custom_id: Optional[str] = submission.get('custom_id')
+            has_item_custom_id: bool = item_custom_id is not None
+            if not has_item_custom_id:
+                continue
+            if not has_explicit_job_id:
+                raise ValidationError("custom_id requires an explicit job_id")
+            is_valid_custom_id: bool = CUSTOM_ID_PATTERN.match(item_custom_id) is not None
+            if not is_valid_custom_id:
+                raise ValidationError(
+                    f"custom_id must be at most 256 characters from [A-Za-z0-9_-.:]: {item_custom_id!r}"
+                )
+            is_duplicate_custom_id: bool = item_custom_id in seen_custom_ids
+            if is_duplicate_custom_id:
+                raise ValidationError(f"Duplicate custom_id within the batch: {item_custom_id!r}")
+            seen_custom_ids.add(item_custom_id)
+        has_idempotency_key: bool = idempotency_key is not None
+        if has_idempotency_key:
+            is_valid_idempotency_key: bool = CUSTOM_ID_PATTERN.match(idempotency_key) is not None
+            if not is_valid_idempotency_key:
+                raise ValidationError("idempotency_key must be at most 256 characters from [A-Za-z0-9_-.:]")
+            if has_explicit_job_id:
+                logger.warning("idempotency_key is ignored for job derivation when an explicit job_id is supplied")
+        logger.debug(f"Submitting job with {len(normalized)} files")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/jobs')
+        body: Dict[str, Any] = {
+            "files": normalized,
+            "metadata": {
+                "mpxpy": True,
+                **(metadata or {})
+            }
+        }
+        if job_id:
+            body["job_id"] = job_id
+        if conversion_formats:
+            body["conversion_formats"] = conversion_formats
+        if image_output_mode:
+            body["image_output_mode"] = image_output_mode
+        _apply_processing_options(
+            body,
+            alphabets_allowed=alphabets_allowed,
+            rm_spaces=rm_spaces,
+            rm_fonts=rm_fonts,
+            idiomatic_eqn_arrays=idiomatic_eqn_arrays,
+            include_equation_tags=include_equation_tags,
+            include_smiles=include_smiles,
+            include_chemistry_as_image=include_chemistry_as_image,
+            include_diagram_text=include_diagram_text,
+            numbers_default_to_math=numbers_default_to_math,
+            math_inline_delimiters=math_inline_delimiters,
+            math_display_delimiters=math_display_delimiters,
+            enable_spell_check=enable_spell_check,
+            auto_number_sections=auto_number_sections,
+            remove_section_numbering=remove_section_numbering,
+            preserve_section_numbering=preserve_section_numbering,
+            enable_tables_fallback=enable_tables_fallback,
+            fullwidth_punctuation=fullwidth_punctuation,
+        )
+        if conversion_options:
+            body.update(conversion_options)
+        headers: Dict[str, str] = dict(self.auth.headers)
+        if has_idempotency_key:
+            headers['Idempotency-Key'] = idempotency_key
+        try:
+            response: requests.Response = post(endpoint, json=body, headers=headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise FilesApiError.from_response(response)
+            response_json: Dict[str, Any] = response.json()
+            response_job_id: str = response_json['job_id']
+            logger.debug(f"Job accepted, job_id: {response_job_id}")
+            return FileJob(
+                auth=self.auth,
+                job_id=response_job_id,
+                file_count=response_json.get('file_count'),
+                request_options=self.request_options,
+            )
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix Files API job request failed: {e}")
+
+    def file_jobs_list(
+            self,
+            start: Optional[str] = None,
+            end: Optional[str] = None,
+            limit: int = 100,
+            paging_state: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """List the jobs submitted under your account, newest first.
+
+        Args:
+            start: Earliest submission date to include, yyyy-MM-dd (UTC).
+                Providing only one of start/end queries that single day.
+            end: Latest submission date to include, yyyy-MM-dd (UTC).
+            limit: Maximum jobs per page, 1-1000 (default 100).
+            paging_state: Opaque pagination cursor from the previous response's
+                'next_page_token'.
+
+        Returns:
+            dict: Response containing 'jobs' (each with job_id and created_at)
+                and 'next_page_token' (non-null when more pages remain).
+
+        Raises:
+            FilesApiError: If the request fails (e.g. 'bad_request' for a
+                malformed date or a limit outside 1-1000).
+        """
+        logger.debug("Listing jobs from the Files API")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/jobs')
+        params: Dict[str, object] = {"limit": limit}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if paging_state:
+            params["paging_state"] = paging_state
+        try:
+            response: requests.Response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise FilesApiError.from_response(response)
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix Files API list jobs request failed: {e}")
+
+    def file_get(self, file_id: str) -> File:
+        """Get a File instance for an existing file_id.
+
+        Constructs the handle without making a request; call File.status() to
+        fetch its state.
+
+        Args:
+            file_id: The file's identifier.
+
+        Returns:
+            File: A File instance for the given id.
+        """
+        return File(auth=self.auth, file_id=file_id, request_options=self.request_options)
+
+    def file_delete(self, file_id: str) -> Dict[str, Any]:
+        """Permanently remove a file and its results from Mathpix-owned storage.
+
+        See File.delete for the full semantics (terminal-state requirement,
+        idempotent repeats, customer-owned buckets unaffected).
+
+        Args:
+            file_id: The file's identifier.
+
+        Returns:
+            dict: Response containing 'file_id' and 'status': 'deleted'.
+
+        Raises:
+            FilesApiError: If the file does not exist, belongs to a different
+                group, or is still processing.
+        """
+        return self.file_get(file_id).delete()
+
+    def file_job_get(self, job_id: str) -> FileJob:
+        """Get a FileJob instance for an existing job_id.
+
+        Constructs the handle without making a request; call FileJob.status() to
+        fetch its state.
+
+        Args:
+            job_id: The job's identifier.
+
+        Returns:
+            FileJob: A FileJob instance for the given id.
+        """
+        return FileJob(auth=self.auth, job_id=job_id, request_options=self.request_options)
+
+    def onboarding_identities(self) -> Dict[str, Any]:
+        """Get the Mathpix identities you grant cloud storage access to.
+
+        Call this BEFORE setting up cloud-side grants: it returns the Mathpix
+        AWS trust account id, the Azure application/tenant ids, and the GCS
+        impersonator service-account email, plus your per-group external_id.
+        The external_id is generated on the first call and is immutable
+        thereafter; it is used in the AWS IAM trust policy and as the GCS
+        bucket-control verification id. The endpoint is idempotent.
+
+        Returns:
+            dict: Response with 'aws' (trust_account_id, external_id), 'azure'
+                (app_id, tenant_id), and 'gcp' (service_account_email,
+                external_id) blocks.
+
+        Raises:
+            FilesApiError: If the request fails.
+            MathpixClientError: If the request cannot be made.
+        """
+        logger.debug("Getting data source onboarding identities")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/onboarding/identities')
+        try:
+            response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise FilesApiError.from_response(response)
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix onboarding identities request failed: {e}")
+
+    def data_source_new(
+            self,
+            provider: str,
+            bucket: str,
+            auth_method: str,
+            provider_specific_details: Dict[str, str],
+            name: Optional[str] = None,
+            region: Optional[str] = None,
+            secret: Optional[str] = None,
+            exist_ok: bool = False,
+    ) -> DataSource:
+        """Register a bucket or container as a Files API data source.
+
+        Complete the cloud-side grant first (IAM role for AWS, RBAC assignment
+        for Azure, service-account impersonation binding plus the
+        .mathpix-verify object for GCS); see
+        https://docs.mathpix.com/reference/files-v1-data-sources for the
+        per-provider guides. Use onboarding_identities() to fetch the Mathpix
+        identities and your external_id before setting up grants.
+
+        For AWS and Azure, call DataSource.test() afterward to verify the grant
+        end-to-end. GCS registration only succeeds once bucket-control
+        verification passes, so a successful return already confirms the grant.
+
+        Args:
+            provider: One of 'aws', 'azure', 'gcp'.
+            bucket: Bucket / container name (S3 bucket, Azure container, or GCS
+                bucket).
+            auth_method: Grant type: 'iam_role' or 'access_key' for aws,
+                'azure_ad' for azure, 'service_account' for gcp.
+            provider_specific_details: Non-secret provider-shaped metadata, e.g.
+                {'iam_role_arn': ..., 'aws_external_id': ...} for aws/iam_role,
+                {'azure_tenant_id': ..., 'storage_account': ...} for azure, or
+                {'gcp_project_id': ..., 'target_sa_email': ...} for gcp.
+            name: Optional human-readable label (max 128 chars).
+            region: Bucket region; required for aws with 'access_key', optional
+                for 'iam_role' (discovered via the bucket).
+            secret: Only for aws with 'access_key' (legacy fallback); rejected
+                for the keyless providers.
+            exist_ok: A data source for the same (provider, bucket) may already
+                exist; the API returns a conflict carrying the existing id. When
+                True, return a DataSource for that existing id instead of
+                raising.
+
+        Returns:
+            DataSource: A new DataSource instance for the registered (or, with
+            exist_ok, the pre-existing) data source.
+
+        Raises:
+            ValidationError: If provider or auth_method is invalid, the
+                auth_method does not belong to the provider, or a secret is
+                supplied for a keyless provider.
+            FilesApiError: If the API rejects the registration ('bad_request',
+                including GCS bucket-control verification failures), the
+                (provider, bucket) pair already exists and exist_ok is False
+                ('conflict'), or the GCS verification probe could not reach the
+                bucket ('unavailable', 503; retryable).
+            MathpixClientError: If the request cannot be made.
+        """
+        is_valid_provider: bool = provider in PROVIDERS
+        if not is_valid_provider:
+            raise ValidationError(f"provider must be one of: {', '.join(PROVIDERS)}")
+        is_valid_auth_method: bool = auth_method in AUTH_METHODS_BY_PROVIDER[provider]
+        if not is_valid_auth_method:
+            raise ValidationError(
+                f"auth_method for provider '{provider}' must be one of: "
+                f"{', '.join(AUTH_METHODS_BY_PROVIDER[provider])}"
+            )
+        has_bucket: bool = bool(bucket)
+        if not has_bucket:
+            raise ValidationError("bucket is required")
+        has_secret: bool = secret is not None
+        is_keyless_auth_method: bool = auth_method != 'access_key'
+        if has_secret and is_keyless_auth_method:
+            raise ValidationError("secret is only accepted for aws with auth_method 'access_key'")
+        logger.debug(f"Registering data source: provider={provider}, bucket={bucket}, auth_method={auth_method}")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/data-sources')
+        body: Dict[str, Any] = {
+            "provider": provider,
+            "bucket": bucket,
+            "auth_method": auth_method,
+            "provider_specific_details": provider_specific_details,
+        }
+        if name:
+            body["name"] = name
+        if region:
+            body["region"] = region
+        if has_secret:
+            body["secret"] = secret
+        try:
+            response: requests.Response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            is_conflict: bool = response.status_code == 409
+            if is_conflict:
+                existing_id: Optional[str] = None
+                try:
+                    conflict_body: Dict[str, Any] = response.json()
+                    existing_id = (
+                        conflict_body.get('data_source_id')
+                        or (conflict_body.get('error_info') or {}).get('data_source_id')
+                    )
+                except ValueError:
+                    pass
+                has_existing_id: bool = existing_id is not None
+                if exist_ok and has_existing_id:
+                    logger.debug(f"Data source already exists, returning existing id: {existing_id}")
+                    return DataSource(auth=self.auth, data_source_id=existing_id, request_options=self.request_options)
+                raise FilesApiError(
+                    f"A data source for ({provider}, {bucket}) already exists"
+                    + (f" with data_source_id {existing_id}" if has_existing_id else ""),
+                    error_id='conflict',
+                    http_status=409,
+                )
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise FilesApiError.from_response(response)
+            response_json: Dict[str, Any] = response.json()
+            data_source_id: str = response_json['data_source_id']
+            logger.debug(f"Data source registered, data_source_id: {data_source_id}")
+            return DataSource(auth=self.auth, data_source_id=data_source_id, request_options=self.request_options)
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix data source registration failed: {e}")
+
+    def data_sources_list(self) -> Dict[str, Any]:
+        """List the data sources registered for your group.
+
+        Secrets (for aws 'access_key' sources) are never returned.
+
+        Returns:
+            dict: Response containing 'data_sources', each with data_source_id,
+                name, provider, bucket, region, auth_method, and created_at.
+
+        Raises:
+            FilesApiError: If the request fails.
+            MathpixClientError: If the request cannot be made.
+        """
+        logger.debug("Listing data sources")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/data-sources')
+        try:
+            response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise FilesApiError.from_response(response)
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix data sources list request failed: {e}")
+
+    def data_source_get(self, data_source_id: str) -> DataSource:
+        """Get a DataSource instance for an existing data_source_id.
+
+        Constructs the handle without making a request; call DataSource.test()
+        to verify it.
+
+        Args:
+            data_source_id: The data source's identifier.
+
+        Returns:
+            DataSource: A DataSource instance for the given id.
+        """
+        return DataSource(auth=self.auth, data_source_id=data_source_id, request_options=self.request_options)
+
+    def data_source_test(self, data_source_id: str) -> Dict[str, Any]:
+        """Verify Mathpix can reach a registered bucket.
+
+        See DataSource.test for the full semantics: HTTP 200 for both outcomes;
+        the {'result', 'checks', 'message'} probe body is returned as-is and a
+        failed probe does not raise.
+
+        Args:
+            data_source_id: The data source's identifier.
+
+        Returns:
+            dict: The probe body ('result', 'checks', 'message').
+
+        Raises:
+            FilesApiError: If the request itself fails (e.g. 'not_found').
+        """
+        return self.data_source_get(data_source_id).test()
+
+    def data_source_delete(self, data_source_id: str) -> Dict[str, Any]:
+        """Permanently remove a data source.
+
+        See DataSource.delete for the full semantics (in-flight jobs keep their
+        cached credentials; cloud-side grants must be revoked separately).
+
+        Args:
+            data_source_id: The data source's identifier.
+
+        Returns:
+            dict: Response containing 'data_source_id' and 'status': 'deleted'.
+
+        Raises:
+            FilesApiError: If the data source does not exist or belongs to a
+                different group.
+        """
+        return self.data_source_get(data_source_id).delete()
+
+    @deprecated("scs_file_new is deprecated; use file_new(source_uri=...) instead")
     def scs_file_new(
             self,
             file_path: Optional[str] = None,
@@ -699,24 +1442,23 @@ class MathpixClient:
     ):
         """Upload a file via files-api v1 for async processing.
 
-        Supports three upload modes (exactly one must be provided):
-        - file_path: Multipart upload from local file
-        - url: Upload from HTTP URL or S3 presigned URL
-        - source_s3_uri: Copy from S3 bucket (requires IAM role access)
+        Deprecated: use file_new(source_uri=...) instead. url and source_s3_uri
+        submissions forward to the public POST /files/v1/uri endpoint; file_path
+        uses the multipart POST /files/v1 upload.
 
         Args:
-            file_path: Path to a local file to upload.
-            url: URL of a remote file (HTTP/HTTPS or S3 presigned URL).
-            source_s3_uri: S3 URI (s3://bucket/key) to copy from.
-            filename: Optional filename to use (defaults to file basename).
-            scs_job_id: Optional job ID to group files together.
+            file_path: Path to a local file to upload via multipart POST /files/v1.
+            url: URL of a remote file, forwarded as source_uri.
+            source_s3_uri: S3 URI (s3://bucket/key), forwarded as source_uri.
+            filename: Optional filename for multipart uploads (ignored for url/source_s3_uri).
+            scs_job_id: Forwarded as job_id.
             conversion_formats: Dict of format names to enable (e.g., {'mmd': True, 'docx': True}).
             conversion_options: Additional conversion options dict.
-            destination_s3_uri: Optional S3 URI to write output files.
+            destination_s3_uri: Forwarded as destination_uri.
             destination_basename: Optional basename for output files (defaults to file_id).
-            s3_region: Optional AWS region for S3 operations (default us-east-1).
-            image_output_mode: Image output mode (e.g., 'local' to upload to destination_s3_uri).
-            include_page_info: Include page info in output (default None).
+            s3_region: Region for multipart uploads (ignored for url/source_s3_uri).
+            image_output_mode: Image output mode (e.g., 'local').
+            include_page_info: Forwarded via conversion_options.
             metadata: Optional dict to attach metadata to the request.
             alphabets_allowed: Optional dict to list alphabets allowed in the output.
             rm_spaces: Remove extra white space from equations (default True).
@@ -742,15 +1484,53 @@ class MathpixClient:
             FileNotFoundError: If the specified file_path does not exist.
             MathpixClientError: If the API request fails.
         """
-        source_count = sum(x is not None for x in [file_path, url, source_s3_uri])
-        if source_count != 1:
+        source_count: int = sum(x is not None for x in [file_path, url, source_s3_uri])
+        has_exactly_one_source: bool = source_count == 1
+        if not has_exactly_one_source:
             logger.error("Invalid parameters: Exactly one of file_path, url, or source_s3_uri must be provided")
             raise ValidationError("Exactly one of file_path, url, or source_s3_uri must be provided")
-        options: Dict[str, object] = {}
-        _metadata: Dict[str, object] = {"mpxpy": True}
-        if metadata:
-            _metadata.update(metadata)
-        options["metadata"] = _metadata
+        merged_conversion_options: Dict[str, object] = dict(conversion_options or {})
+        has_include_page_info: bool = include_page_info is not None
+        if has_include_page_info:
+            merged_conversion_options["include_page_info"] = include_page_info
+        is_remote_submission: bool = file_path is None
+        if is_remote_submission:
+            resolved_source_uri: str = url if url is not None else str(source_s3_uri)
+            return self.file_new(
+                source_uri=resolved_source_uri,
+                job_id=scs_job_id,
+                conversion_formats=conversion_formats,
+                conversion_options=merged_conversion_options or None,
+                destination_uri=destination_s3_uri,
+                destination_basename=destination_basename,
+                image_output_mode=image_output_mode,
+                metadata=metadata,
+                alphabets_allowed=alphabets_allowed,
+                rm_spaces=rm_spaces,
+                rm_fonts=rm_fonts,
+                idiomatic_eqn_arrays=idiomatic_eqn_arrays,
+                include_equation_tags=include_equation_tags,
+                include_smiles=include_smiles,
+                include_chemistry_as_image=include_chemistry_as_image,
+                include_diagram_text=include_diagram_text,
+                numbers_default_to_math=numbers_default_to_math,
+                math_inline_delimiters=math_inline_delimiters,
+                math_display_delimiters=math_display_delimiters,
+                page_ranges=page_ranges,
+                enable_spell_check=enable_spell_check,
+                auto_number_sections=auto_number_sections,
+                remove_section_numbering=remove_section_numbering,
+                preserve_section_numbering=preserve_section_numbering,
+                enable_tables_fallback=enable_tables_fallback,
+                fullwidth_punctuation=fullwidth_punctuation,
+            )
+        # Direct multipart upload via POST /files/v1.
+        options: Dict[str, object] = {
+            "metadata": {
+                "mpxpy": True,
+                **(metadata or {})
+            }
+        }
         if conversion_formats:
             options["conversion_formats"] = conversion_formats
         if scs_job_id:
@@ -763,101 +1543,54 @@ class MathpixClient:
             options["s3_region"] = s3_region
         if image_output_mode:
             options["image_output_mode"] = image_output_mode
-        if include_page_info is not None:
-            options["include_page_info"] = include_page_info
-        if alphabets_allowed is not None:
-            options["alphabets_allowed"] = alphabets_allowed
-        if not rm_spaces:
-            options["rm_spaces"] = rm_spaces
-        if rm_fonts:
-            options["rm_fonts"] = rm_fonts
-        if idiomatic_eqn_arrays:
-            options["idiomatic_eqn_arrays"] = idiomatic_eqn_arrays
-        if include_equation_tags:
-            options["include_equation_tags"] = True
-        if not include_smiles:
-            options["include_smiles"] = include_smiles
-        if include_chemistry_as_image:
-            options["include_chemistry_as_image"] = True
-        if include_diagram_text:
-            options["include_diagram_text"] = include_diagram_text
-        if numbers_default_to_math:
-            options["numbers_default_to_math"] = numbers_default_to_math
-        if math_inline_delimiters is not None:
-            options["math_inline_delimiters"] = math_inline_delimiters
-        if math_display_delimiters is not None:
-            options["math_display_delimiters"] = math_display_delimiters
-        if page_ranges is not None:
-            options["page_ranges"] = page_ranges
-        if enable_spell_check:
-            options["enable_spell_check"] = enable_spell_check
-        if auto_number_sections:
-            options["auto_number_sections"] = auto_number_sections
-        if remove_section_numbering:
-            options["remove_section_numbering"] = remove_section_numbering
-        if not preserve_section_numbering:
-            options["preserve_section_numbering"] = preserve_section_numbering
-        if enable_tables_fallback:
-            options["enable_tables_fallback"] = enable_tables_fallback
-        if fullwidth_punctuation:
-            options["fullwidth_punctuation"] = fullwidth_punctuation
-        if conversion_options:
-            options.update(conversion_options)
-        if file_path:
-            logger.debug(f"Creating new file via files-api: path={file_path}")
-            path = Path(file_path)
-            if not path.is_file():
-                logger.error(f"File not found: {file_path}")
-                raise FileNotFoundError(f"File path not found: {file_path}")
-            endpoint = urljoin(self.auth.files_api_url, '/files/v1')
-            data = {"options_json": json.dumps(options)}
-            # For files/v1 multipart, filename and scs_job_id are form fields (not in options_json)
-            if filename:
-                data["filename"] = filename
-            if scs_job_id:
-                data["scs_job_id"] = scs_job_id
-            with path.open("rb") as f:
-                files = {"file": f}
-                try:
-                    response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
-                    response.raise_for_status()
-                    response_json = response.json()
-                    file_id = response_json['file_id']
-                    logger.debug(f"File upload started, file_id: {file_id}")
-                    return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
-                except requests.exceptions.RequestException as e:
-                    raise MathpixClientError(f"Mathpix files-api request failed: {e}")
-        elif url:
-            logger.debug(f"Creating new file via files-api: url={url}")
-            endpoint = urljoin(self.auth.files_api_url, '/files/v1/url')
-            options["url"] = url
-            if filename:
-                options["filename"] = filename
+        _apply_processing_options(
+            options,
+            alphabets_allowed=alphabets_allowed,
+            rm_spaces=rm_spaces,
+            rm_fonts=rm_fonts,
+            idiomatic_eqn_arrays=idiomatic_eqn_arrays,
+            include_equation_tags=include_equation_tags,
+            include_smiles=include_smiles,
+            include_chemistry_as_image=include_chemistry_as_image,
+            include_diagram_text=include_diagram_text,
+            numbers_default_to_math=numbers_default_to_math,
+            math_inline_delimiters=math_inline_delimiters,
+            math_display_delimiters=math_display_delimiters,
+            page_ranges=page_ranges,
+            enable_spell_check=enable_spell_check,
+            auto_number_sections=auto_number_sections,
+            remove_section_numbering=remove_section_numbering,
+            preserve_section_numbering=preserve_section_numbering,
+            enable_tables_fallback=enable_tables_fallback,
+            fullwidth_punctuation=fullwidth_punctuation,
+        )
+        if merged_conversion_options:
+            options.update(merged_conversion_options)
+        logger.debug(f"Creating new file via files-api multipart: path={file_path}")
+        path: Path = Path(file_path)
+        is_existing_file: bool = path.is_file()
+        if not is_existing_file:
+            logger.error(f"File not found: {file_path}")
+            raise FileNotFoundError(f"File path not found: {file_path}")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1')
+        data: Dict[str, str] = {"options_json": json.dumps(options)}
+        if filename:
+            data["filename"] = filename
+        if scs_job_id:
+            data["scs_job_id"] = scs_job_id
+        with path.open("rb") as f:
+            files: Dict[str, Any] = {"file": f}
             try:
-                response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
+                response: requests.Response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
                 response.raise_for_status()
-                response_json = response.json()
-                file_id = response_json['file_id']
-                logger.debug(f"File from URL started, file_id: {file_id}")
-                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
-            except requests.exceptions.RequestException as e:
-                raise MathpixClientError(f"Mathpix files-api request failed: {e}")
-        else:
-            logger.debug(f"Creating new file via files-api: source_s3_uri={source_s3_uri}")
-            endpoint = urljoin(self.auth.files_api_url, '/files/v1/s3')
-            options["source_s3_uri"] = source_s3_uri
-            if filename:
-                options["filename"] = filename
-            try:
-                response = post(endpoint, json=options, headers=self.auth.headers, **self.request_options)
-                response.raise_for_status()
-                response_json = response.json()
-                file_id = response_json['file_id']
-                logger.debug(f"File from S3 started, file_id: {file_id}")
-                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
+                response_json: Dict[str, Any] = response.json()
+                file_id: str = response_json['file_id']
+                logger.debug(f"File upload started, file_id: {file_id}")
+                return File(auth=self.auth, file_id=file_id, request_options=self.request_options)
             except requests.exceptions.RequestException as e:
                 raise MathpixClientError(f"Mathpix files-api request failed: {e}")
 
+    @deprecated("list_scs_files is deprecated; use file_job_get(job_id).files() instead")
     def list_scs_files(
             self,
             scs_job_id: Optional[str] = None,
@@ -867,7 +1600,9 @@ class MathpixClient:
     ):
         """List files from files-api v1.
 
-        Requires exactly one filter: scs_job_id or filename.
+        Deprecated: for listing a job's files use file_job_get(job_id).files()
+        instead, which targets the public GET /files/v1/jobs/{job_id}/files
+        endpoint and supports a status filter.
 
         Args:
             scs_job_id: Filter by job ID.
@@ -879,7 +1614,7 @@ class MathpixClient:
             dict: Response containing 'file_ids' list and 'next_page_token' for pagination.
         """
         logger.debug("Listing files from files-api")
-        endpoint = urljoin(self.auth.files_api_url, '/files/v1/list')
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/list')
         params: Dict[str, object] = {"limit": limit}
         if scs_job_id:
             params["scs_job_id"] = scs_job_id
@@ -894,6 +1629,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix files-api list request failed: {e}")
 
+    @deprecated("list_scs_jobs is deprecated; use file_jobs_list instead")
     def list_scs_jobs(
             self,
             start: Optional[str] = None,
@@ -903,6 +1639,9 @@ class MathpixClient:
     ):
         """List SCS jobs from files-api v1.
 
+        Deprecated: use file_jobs_list instead, which targets the public
+        GET /files/v1/jobs endpoint.
+
         Args:
             start: Optional start date filter (ISO format).
             end: Optional end date filter (ISO format).
@@ -910,26 +1649,18 @@ class MathpixClient:
             paging_state: Optional paging state for pagination.
 
         Returns:
-            dict: Response containing 'jobs' list and optionally 'paging_state' for next page.
+            dict: Response containing 'jobs' list and 'next_page_token' for pagination.
         """
-        logger.debug("Listing jobs from files-api")
-        endpoint = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs')
-        params: Dict[str, object] = {"limit": limit}
-        if start:
-            params["start"] = start
-        if end:
-            params["end"] = end
-        if paging_state:
-            params["paging_state"] = paging_state
-        try:
-            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            raise MathpixClientError(f"Mathpix files-api list jobs request failed: {e}")
+        return self.file_jobs_list(start=start, end=end, limit=limit, paging_state=paging_state)
 
+    @deprecated("scs_job_status is deprecated; use file_job_get(job_id).status() instead")
     def scs_job_status(self, scs_job_id: str):
         """Get the current status of an SCS job.
+
+        Deprecated: use file_job_get(job_id).status() instead, which targets the
+        public GET /files/v1/jobs/{job_id} endpoint. Note the response shape
+        follows that endpoint (job_id, status, file_count, files_completed,
+        files_errored, created_at, modified_at).
 
         Args:
             scs_job_id: The job ID to get status for.
@@ -937,15 +1668,7 @@ class MathpixClient:
         Returns:
             JSON response containing job status information.
         """
-        logger.debug(f"Getting status for SCS job {scs_job_id}")
-        endpoint = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs/status')
-        params = {'scs_job_id': scs_job_id}
-        try:
-            response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
-            response.raise_for_status()
-            return response.json()
-        except requests.exceptions.RequestException as e:
-            raise MathpixClientError(f"Mathpix files-api job status request failed: {e}")
+        return self.file_job_get(scs_job_id).status()
 
     def query_usage(
             self,

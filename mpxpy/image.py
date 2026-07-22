@@ -31,7 +31,7 @@ class Image:
         result: Dict[str, Any],
         file_path: Optional[str] = None,
         url: Optional[str] = None,
-        improve_mathpix: bool = True,
+        improve_mathpix: Optional[bool] = True,
         include_line_data: Optional[bool] = False,
         metadata: Optional[Dict[str, Any]] = None,
         is_async: Optional[bool] = False,

@@ -1,10 +1,18 @@
 import os
 import pathlib
 import urllib.parse
+from importlib.metadata import version, PackageNotFoundError
 from dotenv import load_dotenv
 from typing import Optional
 from mpxpy.logger import logger
 from mpxpy.errors import AuthenticationError, ValidationError
+
+try:
+    MPXPY_VERSION: str = version("mpxpy")
+except PackageNotFoundError:
+    MPXPY_VERSION = "unknown"
+
+USER_AGENT: str = f"mpxpy/{MPXPY_VERSION}"
 
 
 class Auth:
@@ -66,6 +74,7 @@ class Auth:
         self.headers = {
             'app_id': self.app_id,
             'app_key': self.app_key,
+            'User-Agent': USER_AGENT,
         }
 
     def load_config(self):
