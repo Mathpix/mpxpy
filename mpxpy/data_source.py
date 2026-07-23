@@ -84,21 +84,21 @@ class DataSource:
         return response.json()
 
     def delete(self) -> Dict[str, Any]:
-        """Permanently remove the data source.
+        """Remove the data source registration.
 
         Subsequent submissions that reference the bucket return
-        'data_source_not_found'. In-flight jobs that already started against
-        this data source continue to completion using their cached credentials.
-        To fully revoke access, also remove the cloud-side grant (IAM role,
-        Azure role assignment, or GCS service-account binding).
+        'data_source_not_found'; already-started work is not interrupted. The
+        bucket can be registered again later. Deleting the registration does
+        not revoke access on the cloud side — remove the grant (IAM role,
+        Azure role assignment, or GCS service-account binding) separately to
+        revoke access.
 
         Returns:
             dict: Response containing 'data_source_id' and 'status': 'deleted'.
 
         Raises:
-            FilesApiError: If no data source has this id or it was already
-                deleted ('not_found'), or it belongs to a different group
-                ('forbidden').
+            FilesApiError: If no accessible data source has this id, including
+                one that was already deleted ('not_found').
         """
         logger.debug(f"Deleting data source {self.data_source_id}")
         endpoint: str = urljoin(

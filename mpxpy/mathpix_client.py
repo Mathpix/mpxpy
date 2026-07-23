@@ -7,7 +7,7 @@ if sys.version_info >= (3, 13):
 else:
     from typing_extensions import deprecated
 from pathlib import Path
-from urllib.parse import urljoin
+from urllib.parse import urljoin, urlparse
 from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.file import File
@@ -19,7 +19,7 @@ from mpxpy.conversion import Conversion
 from mpxpy.batch import Batch
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
-from mpxpy.errors import MathpixClientError, ValidationError, FilesApiError, error_from_response
+from mpxpy.errors import MathpixClientError, ValidationError, error_from_response
 from mpxpy.request_handler import post, get
 
 
@@ -85,6 +85,17 @@ def _apply_processing_options(
         options["enable_tables_fallback"] = enable_tables_fallback
     if fullwidth_punctuation:
         options["fullwidth_punctuation"] = fullwidth_punctuation
+
+
+def _redact_uri(uri: Optional[str]) -> str:
+    """Reduce a URI to its scheme and host for logging.
+
+    Signed S3/GCS URLs and Azure SAS URLs carry bearer credentials in their
+    query strings, and debug logs are commonly forwarded to shared log
+    aggregation, so never log the full URI.
+    """
+    parsed = urlparse(uri or '')
+    return f"{parsed.scheme}://{parsed.hostname or ''}"
 
 
 def _reject_reserved_conversion_options(
@@ -964,7 +975,7 @@ class MathpixClient:
         )
         if conversion_options:
             options.update(conversion_options)
-        logger.debug(f"Creating new file via Files API: source_uri={source_uri}")
+        logger.debug(f"Creating new file via Files API: source={_redact_uri(source_uri)}")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/uri')
         headers: Dict[str, str] = dict(self.auth.headers)
         if has_idempotency_key:
@@ -1058,11 +1069,10 @@ class MathpixClient:
         )
         if conversion_options:
             options.update(conversion_options)
-        logger.debug(f"Creating new file via Files API multipart: path={file_path}")
+        logger.debug("Creating new file via Files API multipart upload")
         path: Path = Path(file_path)
         is_existing_file: bool = path.is_file()
         if not is_existing_file:
-            logger.error(f"File not found: {file_path}")
             raise FileNotFoundError(f"File path not found: {file_path}")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1')
         data: Dict[str, str] = {"options_json": json.dumps(options)}
@@ -1363,16 +1373,17 @@ class MathpixClient:
         """Get the Mathpix identities you grant cloud storage access to.
 
         Call this BEFORE setting up cloud-side grants: it returns the Mathpix
-        AWS trust account id, the Azure application/tenant ids, and the GCS
-        impersonator service-account email, plus your per-group external_id.
-        The external_id is generated on the first call and is immutable
-        thereafter; it is used in the AWS IAM trust policy and as the GCS
-        bucket-control verification id. The endpoint is idempotent.
+        AWS trust account id, the Azure application/tenant ids, and, when
+        available, the GCS impersonator service-account email, plus your
+        per-group external_id. The external_id is a stable per-group value; it
+        is used in the AWS IAM trust policy and as the GCS bucket-control
+        verification id. The endpoint is idempotent.
 
         Returns:
-            dict: Response with 'aws' (trust_account_id, external_id), 'azure'
-                (app_id, tenant_id), and 'gcp' (service_account_email,
-                external_id) blocks.
+            dict: Response with 'aws' (trust_account_id, external_id) and
+                'azure' (app_id, tenant_id) blocks, plus a 'gcp'
+                (service_account_email, external_id) block when GCS onboarding
+                is available.
 
         Raises:
             FilesApiError: If the request fails.
@@ -1398,7 +1409,6 @@ class MathpixClient:
             name: Optional[str] = None,
             region: Optional[str] = None,
             secret: Optional[str] = None,
-            exist_ok: bool = False,
     ) -> DataSource:
         """Register a bucket or container as a Files API data source.
 
@@ -1428,14 +1438,9 @@ class MathpixClient:
                 for 'iam_role' (discovered via the bucket).
             secret: Only for aws with 'access_key' (legacy fallback); rejected
                 for the keyless providers.
-            exist_ok: A data source for the same (provider, bucket) may already
-                exist; the API returns a conflict carrying the existing id. When
-                True, return a DataSource for that existing id instead of
-                raising.
 
         Returns:
-            DataSource: A new DataSource instance for the registered (or, with
-            exist_ok, the pre-existing) data source.
+            DataSource: A new DataSource instance for the registered data source.
 
         Raises:
             ValidationError: If provider or auth_method is invalid, the
@@ -1443,9 +1448,10 @@ class MathpixClient:
                 supplied for a keyless provider.
             FilesApiError: If the API rejects the registration ('bad_request',
                 including GCS bucket-control verification failures), the
-                (provider, bucket) pair already exists and exist_ok is False
-                ('conflict'), or the GCS verification probe could not reach the
-                bucket ('unavailable', 503; retryable).
+                registration conflicts with an existing data source
+                ('conflict'; the server message identifies the conflict), or
+                the GCS verification probe could not reach the bucket
+                ('unavailable', 503; retryable).
             MathpixClientError: If the request cannot be made.
         """
         is_valid_provider: bool = provider in PROVIDERS
@@ -1464,7 +1470,7 @@ class MathpixClient:
         is_keyless_auth_method: bool = auth_method != 'access_key'
         if has_secret and is_keyless_auth_method:
             raise ValidationError("secret is only accepted for aws with auth_method 'access_key'")
-        logger.debug(f"Registering data source: provider={provider}, bucket={bucket}, auth_method={auth_method}")
+        logger.debug(f"Registering data source: provider={provider}, auth_method={auth_method}")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/data-sources')
         body: Dict[str, Any] = {
             "provider": provider,
@@ -1480,27 +1486,6 @@ class MathpixClient:
             body["secret"] = secret
         try:
             response: requests.Response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
-            is_conflict: bool = response.status_code == 409
-            if is_conflict:
-                existing_id: Optional[str] = None
-                try:
-                    conflict_body: Dict[str, Any] = response.json()
-                    existing_id = (
-                        conflict_body.get('data_source_id')
-                        or (conflict_body.get('error_info') or {}).get('data_source_id')
-                    )
-                except ValueError:
-                    pass
-                has_existing_id: bool = existing_id is not None
-                if exist_ok and has_existing_id:
-                    logger.debug(f"Data source already exists, returning existing id: {existing_id}")
-                    return DataSource(auth=self.auth, data_source_id=existing_id, request_options=self.request_options)
-                raise FilesApiError(
-                    f"A data source for ({provider}, {bucket}) already exists"
-                    + (f" with data_source_id {existing_id}" if has_existing_id else ""),
-                    error_id='conflict',
-                    http_status=409,
-                )
             has_failed: bool = not response.ok
             if has_failed:
                 raise error_from_response(response)
@@ -1568,10 +1553,10 @@ class MathpixClient:
         return self.data_source_get(data_source_id).test()
 
     def data_source_delete(self, data_source_id: str) -> Dict[str, Any]:
-        """Permanently remove a data source.
+        """Remove a data source registration.
 
-        See DataSource.delete for the full semantics (in-flight jobs keep their
-        cached credentials; cloud-side grants must be revoked separately).
+        See DataSource.delete for the full semantics (already-started work is
+        not interrupted; cloud-side grants must be revoked separately).
 
         Args:
             data_source_id: The data source's identifier.
@@ -1580,8 +1565,7 @@ class MathpixClient:
             dict: Response containing 'data_source_id' and 'status': 'deleted'.
 
         Raises:
-            FilesApiError: If the data source does not exist or belongs to a
-                different group.
+            FilesApiError: If no accessible data source has this id ('not_found').
         """
         return self.data_source_get(data_source_id).delete()
 

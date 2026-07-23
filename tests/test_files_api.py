@@ -165,7 +165,7 @@ def test_onboarding_identities_shape(client: MathpixClient) -> None:
     identities = onboarding_identities_or_skip(client)
     assert 'aws' in identities
     assert 'azure' in identities
-    assert 'gcp' in identities
+    # The 'gcp' block is optional
     assert identities['aws']['external_id']
     # Idempotent: a second call returns the same external_id.
     repeat = client.onboarding_identities()
@@ -173,7 +173,7 @@ def test_onboarding_identities_shape(client: MathpixClient) -> None:
 
 
 def test_data_source_lifecycle(client: MathpixClient) -> None:
-    """Register (dummy grant) -> conflict -> exist_ok -> test probe -> list -> delete."""
+    """Register (dummy grant) -> conflict -> test probe -> list -> delete."""
     external_id = onboarding_identities_or_skip(client)['aws']['external_id']
     bucket = unique_id('mpxpy-test-bucket')
     details = {
@@ -190,15 +190,11 @@ def test_data_source_lifecycle(client: MathpixClient) -> None:
     )
     assert data_source.data_source_id
     try:
-        # Re-registering the same (provider, bucket) conflicts...
+        # Re-registering the same (provider, bucket) conflicts.
         with pytest.raises(FilesApiError) as exc_info:
             client.data_source_new(provider='aws', bucket=bucket, auth_method='iam_role',
                                    provider_specific_details=details)
         assert exc_info.value.error_id == 'conflict'
-        # ...unless exist_ok resolves to the existing id.
-        existing = client.data_source_new(provider='aws', bucket=bucket, auth_method='iam_role',
-                                          provider_specific_details=details, exist_ok=True)
-        assert existing.data_source_id == data_source.data_source_id
         # The dummy role can't be assumed, so the probe reports failure without raising.
         probe = data_source.test()
         assert probe['result'] in ('ok', 'failed')

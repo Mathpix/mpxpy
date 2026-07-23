@@ -3,6 +3,7 @@
 These tests mock the request layer; no network access is required.
 """
 import json
+import logging
 from typing import Any, Dict, Iterator, Optional
 from unittest.mock import patch
 import pytest
@@ -167,6 +168,19 @@ def test_file_new_raises_files_api_error(client: MathpixClient) -> None:
             client.file_new(source_uri='s3://unregistered/doc.pdf')
     assert exc_info.value.error_id == 'data_source_not_found'
     assert exc_info.value.http_status == 404
+
+
+def test_file_new_does_not_log_signed_uri_credentials(client: MathpixClient, caplog) -> None:
+    # Signed URLs carry bearer credentials in their query strings; logs must
+    # only ever contain the redacted scheme/host.
+    signed_uri = 'https://bucket.s3.amazonaws.com/doc.pdf?X-Amz-Credential=AKIAEXAMPLE&X-Amz-Signature=sigvalue'
+    with caplog.at_level(logging.DEBUG, logger='mathpix'):
+        with patch('mpxpy.mathpix_client.post') as mock_post:
+            mock_post.return_value = FakeResponse(json_body={'file_id': 'abc-123'})
+            client.file_new(source_uri=signed_uri)
+    assert 'X-Amz-Signature' not in caplog.text
+    assert 'sigvalue' not in caplog.text
+    assert 'AKIAEXAMPLE' not in caplog.text
 
 
 def test_file_new_non_envelope_error_is_client_error(client: MathpixClient) -> None:
@@ -488,6 +502,18 @@ def test_onboarding_identities(client: MathpixClient) -> None:
     assert args[0].endswith('/files/v1/onboarding/identities')
 
 
+def test_onboarding_identities_gcp_block_is_optional(client: MathpixClient) -> None:
+    identities = {
+        'aws': {'trust_account_id': '123456789012', 'external_id': 'group-uuid'},
+        'azure': {'app_id': 'app-uuid', 'tenant_id': 'tenant-uuid'},
+    }
+    with patch('mpxpy.mathpix_client.get') as mock_get:
+        mock_get.return_value = FakeResponse(json_body=identities)
+        result = client.onboarding_identities()
+    assert result == identities
+    assert 'gcp' not in result
+
+
 def test_data_source_new_request_shape(client: MathpixClient) -> None:
     with patch('mpxpy.mathpix_client.post') as mock_post:
         mock_post.return_value = FakeResponse(json_body={'data_source_id': 'ds-1'})
@@ -535,33 +561,81 @@ def test_data_source_new_validation(client: MathpixClient) -> None:
                                provider_specific_details=details)
 
 
-def test_data_source_new_conflict_raises_by_default(client: MathpixClient) -> None:
+def test_data_source_new_bucket_conflict_raises(client: MathpixClient) -> None:
     with patch('mpxpy.mathpix_client.post') as mock_post:
         mock_post.return_value = FakeResponse(
             status_code=409,
             json_body={'error': 'conflict',
-                       'error_info': {'id': 'conflict', 'data_source_id': 'ds-existing',
+                       'error_info': {'id': 'conflict',
                                       'message': 'A data source for this bucket is already registered.'}},
         )
         with pytest.raises(FilesApiError) as exc_info:
             client.data_source_new(provider='aws', bucket='b', auth_method='iam_role',
                                    provider_specific_details={'iam_role_arn': 'arn', 'aws_external_id': 'x'})
     assert exc_info.value.error_id == 'conflict'
-    assert 'ds-existing' in str(exc_info.value)
+    assert exc_info.value.http_status == 409
+    assert 'bucket is already registered' in str(exc_info.value)
 
 
-def test_data_source_new_conflict_exist_ok_returns_existing(client: MathpixClient) -> None:
-    # data_source_id at the top level (the nested error_info shape is covered above)
+def test_data_source_new_duplicate_name_conflict_raises(client: MathpixClient) -> None:
+    # The same 409 'conflict' also covers a duplicate name; the server message
+    # is preserved so the two cases are distinguishable.
     with patch('mpxpy.mathpix_client.post') as mock_post:
         mock_post.return_value = FakeResponse(
             status_code=409,
-            json_body={'error': 'conflict', 'data_source_id': 'ds-existing'},
+            json_body={'error': 'conflict',
+                       'error_info': {'id': 'conflict',
+                                      'message': 'A data source with this name is already registered.'}},
         )
-        data_source = client.data_source_new(provider='aws', bucket='b', auth_method='iam_role',
-                                             provider_specific_details={'iam_role_arn': 'arn', 'aws_external_id': 'x'},
-                                             exist_ok=True)
-    assert isinstance(data_source, DataSource)
-    assert data_source.data_source_id == 'ds-existing'
+        with pytest.raises(FilesApiError) as exc_info:
+            client.data_source_new(provider='aws', bucket='other-bucket', auth_method='iam_role',
+                                   provider_specific_details={'iam_role_arn': 'arn', 'aws_external_id': 'x'},
+                                   name='taken-name')
+    assert exc_info.value.error_id == 'conflict'
+    assert 'name is already registered' in str(exc_info.value)
+
+
+def test_data_source_new_azure_request_shape(client: MathpixClient) -> None:
+    details = {'azure_tenant_id': 'tenant-uuid', 'storage_account': 'mystorageacct'}
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'data_source_id': 'ds-az'})
+        client.data_source_new(provider='azure', bucket='my-container', auth_method='azure_ad',
+                               provider_specific_details=details)
+    _, kwargs = mock_post.call_args
+    body = kwargs['json']
+    assert body['provider'] == 'azure'
+    assert body['bucket'] == 'my-container'
+    assert body['auth_method'] == 'azure_ad'
+    assert body['provider_specific_details'] == details
+    assert 'secret' not in body
+
+
+def test_data_source_new_gcp_request_shape(client: MathpixClient) -> None:
+    details = {'gcp_project_id': 'my-project', 'target_sa_email': 'ingest@my-project.iam.gserviceaccount.com'}
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'data_source_id': 'ds-gcp'})
+        client.data_source_new(provider='gcp', bucket='my-bucket', auth_method='service_account',
+                               provider_specific_details=details)
+    _, kwargs = mock_post.call_args
+    body = kwargs['json']
+    assert body['provider'] == 'gcp'
+    assert body['auth_method'] == 'service_account'
+    assert body['provider_specific_details'] == details
+    assert 'secret' not in body
+
+
+def test_data_source_new_aws_access_key_request_shape(client: MathpixClient) -> None:
+    details = {'access_key_id': 'AKIAEXAMPLE'}
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'data_source_id': 'ds-key'})
+        client.data_source_new(provider='aws', bucket='my-bucket', auth_method='access_key',
+                               provider_specific_details=details, secret='key-material',
+                               region='us-east-1')
+    _, kwargs = mock_post.call_args
+    body = kwargs['json']
+    assert body['auth_method'] == 'access_key'
+    assert body['secret'] == 'key-material'
+    assert body['region'] == 'us-east-1'
 
 
 def test_data_source_test_returns_failed_probe_without_raising(client: MathpixClient) -> None:

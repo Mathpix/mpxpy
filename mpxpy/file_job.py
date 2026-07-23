@@ -226,7 +226,7 @@ class FileJob:
         has_custom_id: bool = bool(custom_id)
         if not has_custom_id:
             raise ValidationError("custom_id is required")
-        logger.debug(f"Getting file by custom_id {custom_id} in job {self.job_id}")
+        logger.debug(f"Getting file by custom_id in job {self.job_id}")
         endpoint: str = urljoin(
             self.auth.files_api_url,
             f'/files/v1/jobs/{quote(self.job_id, safe="")}/files/{quote(custom_id, safe="")}'

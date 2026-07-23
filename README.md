@@ -528,7 +528,7 @@ probe = data_source.test()  # {'result': 'ok', 'checks': {'read': True, 'write':
 
 ##### `MathpixClient.onboarding_identities`
 
-Returns the Mathpix identities you grant access to (AWS trust account, Azure app/tenant, GCS impersonator service account) plus your per-group `external_id`. Call it before setting up cloud-side grants; the `external_id` is generated on first call and immutable thereafter.
+Returns the Mathpix identities you grant access to (AWS trust account, Azure app/tenant, and — when available — the GCS impersonator service account) plus your per-group `external_id`, a stable value used in the AWS IAM trust policy and GCS bucket-control verification. Call it before setting up cloud-side grants.
 
 ##### `MathpixClient.data_source_new`
 
@@ -543,7 +543,8 @@ Register a bucket as a data source. Returns a `DataSource` instance.
 - `name`: Optional human-readable label.
 - `region`: Bucket region (required for aws `access_key` only).
 - `secret`: Only for aws `access_key` (legacy); rejected for keyless providers.
-- `exist_ok`: When the `(provider, bucket)` pair is already registered, return the existing `DataSource` instead of raising a conflict.
+
+A registration that conflicts with an existing data source raises `FilesApiError` (`'conflict'`); the server message identifies the conflict.
 
 For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to-end. GCS registration verifies bucket control up front, so a successful return already confirms the grant.
 
@@ -552,7 +553,7 @@ For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to
 - `data_sources_list()`: List the group's registered data sources (secrets are never returned).
 - `data_source_get(data_source_id)`: Returns a `DataSource` handle.
 - `data_source_test(data_source_id)`: Runs the read/write probe; returns `{'result', 'checks', 'message'}` and does **not** raise on a failed probe — use it to diagnose grant issues after customer-side IAM changes.
-- `data_source_delete(data_source_id)`: Permanently removes the data source. In-flight jobs continue with cached credentials; revoke the cloud-side grant separately for full revocation.
+- `data_source_delete(data_source_id)`: Removes the registration; already-started work is not interrupted, and the bucket can be registered again later. Deleting the registration does not revoke access on the cloud side — remove the grant separately to revoke access.
 
 ##### `MathpixClient.query_usage`
 

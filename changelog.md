@@ -10,8 +10,9 @@
   - New `FilesApiError` exception carries the Files API error code (`error_id`) and HTTP status; it is raised only for responses with a recognizable Files API error body, other failures raise `MathpixClientError`
   - In `file_new` and `file_job_new`, `conversion_options` may no longer override the validated request fields (`source_uri`, `files`, `job_id`, `custom_id`, `metadata`)
   - The client no longer duplicates server-enforced constraints (identifier charset/length, items-per-call ceiling, status filter values); the server's `FilesApiError` is authoritative for those
-  - `ScsFile`, `scs_file_new`, `list_scs_files`, `list_scs_jobs`, and `scs_job_status` are deprecated. `scs_file_new` is now a thin wrapper that translates its legacy argument names and forwards to `file_new`; the listing/status methods keep their legacy endpoints and response shapes during the deprecation window; the private `ScsFile.cropped_image()` helper is removed. Migrate to `File`, `file_new`, `file_job_get(job_id).files()`, `file_job_list`, and `file_job_get(job_id).status()`
-  - Data Sources API: `onboarding_identities`, `data_source_new` (with `exist_ok` conflict resolution), `data_sources_list`, `data_source_get`, `data_source_test`, and `data_source_delete` register and manage cloud storage (S3, GCS, Azure Blob) for use as `source_uri`/`destination_uri`; new `DataSource` class with `test()` and `delete()`
+  - `ScsFile`, `scs_file_new`, `list_scs_files`, `list_scs_jobs`, and `scs_job_status` are deprecated. `scs_file_new` is now a thin wrapper that translates its legacy argument names and forwards to `file_new`; the listing/status methods keep their legacy endpoints and response shapes during the deprecation window. Migrate to `File`, `file_new`, `file_job_get(job_id).files()`, `file_job_list`, and `file_job_get(job_id).status()`
+  - Data Sources API: `onboarding_identities`, `data_source_new`, `data_sources_list`, `data_source_get`, `data_source_test`, and `data_source_delete` register and manage cloud storage (S3, GCS, Azure Blob) for use as `source_uri`/`destination_uri`; new `DataSource` class with `test()` and `delete()`
+  - Debug logging redacts remote URIs to scheme and host, since signed URLs carry credentials in their query strings
 - All requests now send a `User-Agent: mpxpy/<version>` header
 
 ## June 5, 2025
