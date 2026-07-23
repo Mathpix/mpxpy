@@ -13,7 +13,7 @@ from mpxpy.image import Image
 from mpxpy.file import File
 from mpxpy.scs_file import ScsFile
 from mpxpy.file_batch import FileBatch
-from mpxpy.file_job import FileJob, FileSubmission, CUSTOM_ID_PATTERN, normalize_file_submission
+from mpxpy.file_job import FileJob, FileSubmission, normalize_file_submission
 from mpxpy.data_source import DataSource, PROVIDERS, AUTH_METHODS_BY_PROVIDER
 from mpxpy.conversion import Conversion
 from mpxpy.batch import Batch
@@ -21,9 +21,6 @@ from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError, FilesApiError, error_from_response
 from mpxpy.request_handler import post, get
-
-# Ceiling on items per POST /files/v1/jobs call.
-MAX_JOB_FILES = 200_000
 
 
 def _apply_processing_options(
@@ -764,7 +761,8 @@ class MathpixClient:
 
     def file_new(
             self,
-            source_uri: str,
+            source_uri: Optional[str] = None,
+            file_path: Optional[str] = None,
             job_id: Optional[str] = None,
             custom_id: Optional[str] = None,
             idempotency_key: Optional[str] = None,
@@ -796,15 +794,18 @@ class MathpixClient:
             enable_tables_fallback: Optional[bool] = False,
             fullwidth_punctuation: Optional[bool] = None,
     ) -> File:
-        """Submit a single document by remote URI for async processing.
+        """Submit a single document for async processing.
 
-        Submits via POST /files/v1/uri. source_uri may be an s3://, gs://, public
-        https://, or Azure Blob HTTPS URL. Non-public sources require a registered
-        data source for the bucket; see
+        Exactly one of source_uri or file_path must be provided. A source_uri
+        submits via POST /files/v1/uri and may be an s3://, gs://, public
+        https://, or Azure Blob HTTPS URL; non-public sources require a
+        registered data source for the bucket, see
         https://docs.mathpix.com/reference/files-v1-data-sources
+        A file_path uploads a local file via multipart POST /files/v1.
 
         Args:
             source_uri: Remote location of the source document.
+            file_path: Path to a local file to upload.
             job_id: Optional job to associate this file with. Required whenever
                 custom_id is supplied.
             custom_id: Optional customer-supplied identifier (max 256 chars,
@@ -812,13 +813,14 @@ class MathpixClient:
                 (job_id, custom_id) is the idempotency key: re-submitting the same
                 pair returns the original file rather than creating a new one, as
                 long as the original file is still live (pending, split, or
-                completed).
+                completed). Not supported for local file_path uploads.
             idempotency_key: Optional client-generated key sent as the
                 Idempotency-Key header (same constraints as custom_id). Makes a
                 standalone submission safe to retry: re-sending the same request
                 returns the original file_id instead of creating a duplicate. If
                 both a (job_id, custom_id) pair and an idempotency_key are present,
-                the pair takes precedence.
+                the pair takes precedence. Not supported for local file_path
+                uploads.
             filename: Optional display name for the file (defaults to a name
                 derived from source_uri).
             conversion_formats: Dict of format names to enable (e.g., {'docx': True,
@@ -860,29 +862,62 @@ class MathpixClient:
             File: A new File instance for polling status and downloading results.
 
         Raises:
-            ValidationError: If source_uri is empty, custom_id is supplied without
-                job_id, an identifier fails the charset/length constraint, or
+            ValidationError: If not exactly one of source_uri and file_path is
+                provided, custom_id is supplied without job_id, custom_id or
+                idempotency_key is supplied for a local upload, or
                 conversion_options contains a reserved request field.
+            FileNotFoundError: If the specified file_path does not exist.
             FilesApiError: If the API rejects the submission.
             MathpixClientError: If the request fails.
         """
-        has_source_uri: bool = bool(source_uri)
-        if not has_source_uri:
-            raise ValidationError("source_uri is required")
+        has_exactly_one_source: bool = sum(x is not None for x in [source_uri, file_path]) == 1
+        if not has_exactly_one_source:
+            raise ValidationError("Exactly one of source_uri or file_path must be provided")
         _reject_reserved_conversion_options(conversion_options, {'source_uri', 'job_id', 'custom_id', 'metadata'})
         has_custom_id: bool = custom_id is not None
         if has_custom_id:
             has_job_id: bool = job_id is not None
             if not has_job_id:
                 raise ValidationError("custom_id requires an explicit job_id")
-            is_valid_custom_id: bool = CUSTOM_ID_PATTERN.match(custom_id) is not None
-            if not is_valid_custom_id:
-                raise ValidationError("custom_id must be at most 256 characters from [A-Za-z0-9_-.:]")
         has_idempotency_key: bool = idempotency_key is not None
-        if has_idempotency_key:
-            is_valid_idempotency_key: bool = CUSTOM_ID_PATTERN.match(idempotency_key) is not None
-            if not is_valid_idempotency_key:
-                raise ValidationError("idempotency_key must be at most 256 characters from [A-Za-z0-9_-.:]")
+        if file_path is not None:
+            is_uri_only_option_set: bool = has_custom_id or has_idempotency_key
+            if is_uri_only_option_set:
+                raise ValidationError("custom_id and idempotency_key are not supported for local file_path uploads")
+            return self._file_new_multipart(
+                file_path=file_path,
+                job_id=job_id,
+                filename=filename,
+                conversion_formats=conversion_formats,
+                conversion_options=conversion_options,
+                destination_uri=destination_uri,
+                destination_basename=destination_basename,
+                s3_region=s3_region,
+                image_output_mode=image_output_mode,
+                include_page_info=include_page_info,
+                metadata=metadata,
+                alphabets_allowed=alphabets_allowed,
+                rm_spaces=rm_spaces,
+                rm_fonts=rm_fonts,
+                idiomatic_eqn_arrays=idiomatic_eqn_arrays,
+                include_equation_tags=include_equation_tags,
+                include_smiles=include_smiles,
+                include_chemistry_as_image=include_chemistry_as_image,
+                include_diagram_text=include_diagram_text,
+                numbers_default_to_math=numbers_default_to_math,
+                math_inline_delimiters=math_inline_delimiters,
+                math_display_delimiters=math_display_delimiters,
+                page_ranges=page_ranges,
+                enable_spell_check=enable_spell_check,
+                auto_number_sections=auto_number_sections,
+                remove_section_numbering=remove_section_numbering,
+                preserve_section_numbering=preserve_section_numbering,
+                enable_tables_fallback=enable_tables_fallback,
+                fullwidth_punctuation=fullwidth_punctuation,
+            )
+        has_source_uri: bool = bool(source_uri)
+        if not has_source_uri:
+            raise ValidationError("source_uri must be a non-empty string")
         options: Dict[str, object] = {
             "source_uri": source_uri,
         }
@@ -946,6 +981,109 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix Files API request failed: {e}")
 
+    def _file_new_multipart(
+            self,
+            file_path: str,
+            job_id: Optional[str] = None,
+            filename: Optional[str] = None,
+            conversion_formats: Optional[Dict[str, bool]] = None,
+            conversion_options: Optional[Dict[str, object]] = None,
+            destination_uri: Optional[str] = None,
+            destination_basename: Optional[str] = None,
+            s3_region: Optional[str] = None,
+            image_output_mode: Optional[str] = None,
+            include_page_info: Optional[bool] = None,
+            metadata: Optional[Dict[str, object]] = None,
+            alphabets_allowed: Optional[Dict[str, str]] = None,
+            rm_spaces: Optional[bool] = True,
+            rm_fonts: Optional[bool] = False,
+            idiomatic_eqn_arrays: Optional[bool] = False,
+            include_equation_tags: Optional[bool] = False,
+            include_smiles: Optional[bool] = True,
+            include_chemistry_as_image: Optional[bool] = False,
+            include_diagram_text: Optional[bool] = False,
+            numbers_default_to_math: Optional[bool] = False,
+            math_inline_delimiters: Optional[Tuple[str, str]] = None,
+            math_display_delimiters: Optional[Tuple[str, str]] = None,
+            page_ranges: Optional[str] = None,
+            enable_spell_check: Optional[bool] = False,
+            auto_number_sections: Optional[bool] = False,
+            remove_section_numbering: Optional[bool] = False,
+            preserve_section_numbering: Optional[bool] = True,
+            enable_tables_fallback: Optional[bool] = False,
+            fullwidth_punctuation: Optional[bool] = None,
+    ) -> File:
+        """Upload a local file via multipart POST /files/v1 for file_new.
+
+        The multipart endpoint uses the legacy field names, so job_id and
+        destination_uri are translated to scs_job_id and destination_s3_uri.
+        """
+        options: Dict[str, object] = {}
+        if metadata:
+            options["metadata"] = metadata
+        if conversion_formats:
+            options["conversion_formats"] = conversion_formats
+        if job_id:
+            options["scs_job_id"] = job_id
+        if destination_uri:
+            options["destination_s3_uri"] = destination_uri
+        if destination_basename:
+            options["destination_basename"] = destination_basename
+        if s3_region:
+            options["s3_region"] = s3_region
+        if image_output_mode:
+            options["image_output_mode"] = image_output_mode
+        if include_page_info is not None:
+            options["include_page_info"] = include_page_info
+        _apply_processing_options(
+            options,
+            alphabets_allowed=alphabets_allowed,
+            rm_spaces=rm_spaces,
+            rm_fonts=rm_fonts,
+            idiomatic_eqn_arrays=idiomatic_eqn_arrays,
+            include_equation_tags=include_equation_tags,
+            include_smiles=include_smiles,
+            include_chemistry_as_image=include_chemistry_as_image,
+            include_diagram_text=include_diagram_text,
+            numbers_default_to_math=numbers_default_to_math,
+            math_inline_delimiters=math_inline_delimiters,
+            math_display_delimiters=math_display_delimiters,
+            page_ranges=page_ranges,
+            enable_spell_check=enable_spell_check,
+            auto_number_sections=auto_number_sections,
+            remove_section_numbering=remove_section_numbering,
+            preserve_section_numbering=preserve_section_numbering,
+            enable_tables_fallback=enable_tables_fallback,
+            fullwidth_punctuation=fullwidth_punctuation,
+        )
+        if conversion_options:
+            options.update(conversion_options)
+        logger.debug(f"Creating new file via Files API multipart: path={file_path}")
+        path: Path = Path(file_path)
+        is_existing_file: bool = path.is_file()
+        if not is_existing_file:
+            logger.error(f"File not found: {file_path}")
+            raise FileNotFoundError(f"File path not found: {file_path}")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1')
+        data: Dict[str, str] = {"options_json": json.dumps(options)}
+        if filename:
+            data["filename"] = filename
+        if job_id:
+            data["scs_job_id"] = job_id
+        with path.open("rb") as f:
+            files: Dict[str, Any] = {"file": f}
+            try:
+                response: requests.Response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
+                has_failed: bool = not response.ok
+                if has_failed:
+                    raise error_from_response(response)
+                response_json: Dict[str, Any] = response.json()
+                file_id: str = response_json['file_id']
+                logger.debug(f"File upload started, file_id: {file_id}")
+                return File(auth=self.auth, file_id=file_id, request_options=self.request_options)
+            except requests.exceptions.RequestException as e:
+                raise MathpixClientError(f"Mathpix Files API multipart request failed: {e}")
+
     def file_job_new(
             self,
             files: List[Union[FileSubmission, Dict[str, Any]]],
@@ -975,7 +1113,8 @@ class MathpixClient:
     ) -> FileJob:
         """Submit a batch of documents for async processing in one call.
 
-        Submits up to 200,000 documents via POST /files/v1/jobs. The request is
+        Submits documents in bulk via POST /files/v1/jobs; the server enforces
+        an items-per-call ceiling (currently 200,000). The request is
         accept-and-defer: it returns immediately with a job_id and file_count,
         then submits the items in the background. Per-item failures (bad or
         unsupported source_uri, missing data source) are NOT reported
@@ -1031,21 +1170,19 @@ class MathpixClient:
             file_count.
 
         Raises:
-            ValidationError: If files is empty or over the 200,000-item ceiling,
-                an item is malformed or missing source_uri, a custom_id fails the
-                charset/length constraint or is duplicated within the batch, any
+            ValidationError: If files is empty, an item is malformed or missing
+                source_uri, a custom_id is duplicated within the batch, any
                 custom_id is supplied without an explicit job_id, or
                 conversion_options contains a reserved request field.
-            FilesApiError: If the API rejects the submission.
+            FilesApiError: If the API rejects the submission (e.g. over the
+                items-per-call ceiling or an identifier failing the
+                charset/length constraint).
             MathpixClientError: If the request fails.
         """
         has_files: bool = bool(files)
         if not has_files:
             raise ValidationError("files must be a non-empty list")
         _reject_reserved_conversion_options(conversion_options, {'files', 'job_id', 'metadata'})
-        is_over_ceiling: bool = len(files) > MAX_JOB_FILES
-        if is_over_ceiling:
-            raise ValidationError(f"files exceeds the {MAX_JOB_FILES} items-per-call ceiling: {len(files)}")
         normalized: List[Dict[str, Any]] = [normalize_file_submission(item) for item in files]
         has_explicit_job_id: bool = job_id is not None
         seen_custom_ids: Set[str] = set()
@@ -1056,22 +1193,13 @@ class MathpixClient:
                 continue
             if not has_explicit_job_id:
                 raise ValidationError("custom_id requires an explicit job_id")
-            is_valid_custom_id: bool = CUSTOM_ID_PATTERN.match(item_custom_id) is not None
-            if not is_valid_custom_id:
-                raise ValidationError(
-                    f"custom_id must be at most 256 characters from [A-Za-z0-9_-.:]: {item_custom_id!r}"
-                )
             is_duplicate_custom_id: bool = item_custom_id in seen_custom_ids
             if is_duplicate_custom_id:
                 raise ValidationError(f"Duplicate custom_id within the batch: {item_custom_id!r}")
             seen_custom_ids.add(item_custom_id)
         has_idempotency_key: bool = idempotency_key is not None
-        if has_idempotency_key:
-            is_valid_idempotency_key: bool = CUSTOM_ID_PATTERN.match(idempotency_key) is not None
-            if not is_valid_idempotency_key:
-                raise ValidationError("idempotency_key must be at most 256 characters from [A-Za-z0-9_-.:]")
-            if has_explicit_job_id:
-                logger.warning("idempotency_key is ignored for job derivation when an explicit job_id is supplied")
+        if has_idempotency_key and has_explicit_job_id:
+            logger.warning("idempotency_key is ignored for job derivation when an explicit job_id is supplied")
         logger.debug(f"Submitting job with {len(normalized)} files")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/jobs')
         body: Dict[str, Any] = {
@@ -1127,7 +1255,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix Files API job request failed: {e}")
 
-    def file_jobs_list(
+    def file_job_list(
             self,
             start: Optional[str] = None,
             end: Optional[str] = None,
@@ -1171,18 +1299,26 @@ class MathpixClient:
             raise MathpixClientError(f"Mathpix Files API list jobs request failed: {e}")
 
     def file_get(self, file_id: str) -> File:
-        """Get a File instance for an existing file_id.
+        """Fetch an existing file and return its File instance.
 
-        Constructs the handle without making a request; call File.status() to
-        fetch its state.
+        Performs GET /files/v1/{file_id}; the returned File is seeded with the
+        response, so the lazy status attributes are populated without another
+        request.
 
         Args:
             file_id: The file's identifier.
 
         Returns:
-            File: A File instance for the given id.
+            File: A File instance seeded with the file's current status.
+
+        Raises:
+            FilesApiError: If the file does not exist ('not_found') or belongs
+                to a different group ('forbidden').
+            MathpixClientError: If the request fails without a Files API error body.
         """
-        return File(auth=self.auth, file_id=file_id, request_options=self.request_options)
+        file: File = File(auth=self.auth, file_id=file_id, request_options=self.request_options)
+        file.status()
+        return file
 
     def file_delete(self, file_id: str) -> Dict[str, Any]:
         """Permanently remove a file and its results from Mathpix-owned storage.
@@ -1200,21 +1336,28 @@ class MathpixClient:
             FilesApiError: If the file does not exist, belongs to a different
                 group, or is still processing.
         """
-        return self.file_get(file_id).delete()
+        return File(auth=self.auth, file_id=file_id, request_options=self.request_options).delete()
 
     def file_job_get(self, job_id: str) -> FileJob:
-        """Get a FileJob instance for an existing job_id.
+        """Fetch an existing job and return its FileJob instance.
 
-        Constructs the handle without making a request; call FileJob.status() to
-        fetch its state.
+        Performs GET /files/v1/jobs/{job_id} and seeds the returned FileJob's
+        file_count from the response.
 
         Args:
             job_id: The job's identifier.
 
         Returns:
-            FileJob: A FileJob instance for the given id.
+            FileJob: A FileJob instance seeded with the job's current file_count.
+
+        Raises:
+            FilesApiError: If the job does not exist ('not_found').
+            MathpixClientError: If the request fails without a Files API error body.
         """
-        return FileJob(auth=self.auth, job_id=job_id, request_options=self.request_options)
+        job: FileJob = FileJob(auth=self.auth, job_id=job_id, request_options=self.request_options)
+        job_status: Dict[str, Any] = job.status()
+        job.file_count = job_status.get('file_count')
+        return job
 
     def onboarding_identities(self) -> Dict[str, Any]:
         """Get the Mathpix identities you grant cloud storage access to.
@@ -1479,9 +1622,9 @@ class MathpixClient:
     ) -> ScsFile:
         """Upload a file via files-api v1 for async processing.
 
-        Deprecated: use file_new(source_uri=...) instead. url and source_s3_uri
-        submissions forward to the public POST /files/v1/uri endpoint; file_path
-        uses the multipart POST /files/v1 upload.
+        Deprecated: use file_new instead. This wrapper translates url and
+        source_s3_uri to source_uri, scs_job_id to job_id, and
+        destination_s3_uri to destination_uri, then forwards to file_new.
 
         Args:
             file_path: Path to a local file to upload via multipart POST /files/v1.
@@ -1522,70 +1665,28 @@ class MathpixClient:
         Raises:
             ValidationError: If not exactly one of file_path, url, or source_s3_uri is provided.
             FileNotFoundError: If the specified file_path does not exist.
-            MathpixClientError: If the API request fails.
+            FilesApiError: If the API rejects the submission.
+            MathpixClientError: If the request fails.
         """
         source_count: int = sum(x is not None for x in [file_path, url, source_s3_uri])
         has_exactly_one_source: bool = source_count == 1
         if not has_exactly_one_source:
             logger.error("Invalid parameters: Exactly one of file_path, url, or source_s3_uri must be provided")
             raise ValidationError("Exactly one of file_path, url, or source_s3_uri must be provided")
-        if file_path is None:
-            resolved_source_uri: str = url if url is not None else str(source_s3_uri)
-            submitted_file: File = self.file_new(
-                source_uri=resolved_source_uri,
-                job_id=scs_job_id,
-                filename=filename,
-                conversion_formats=conversion_formats,
-                conversion_options=conversion_options,
-                destination_uri=destination_s3_uri,
-                destination_basename=destination_basename,
-                s3_region=s3_region,
-                image_output_mode=image_output_mode,
-                include_page_info=include_page_info,
-                metadata=metadata,
-                alphabets_allowed=alphabets_allowed,
-                rm_spaces=rm_spaces,
-                rm_fonts=rm_fonts,
-                idiomatic_eqn_arrays=idiomatic_eqn_arrays,
-                include_equation_tags=include_equation_tags,
-                include_smiles=include_smiles,
-                include_chemistry_as_image=include_chemistry_as_image,
-                include_diagram_text=include_diagram_text,
-                numbers_default_to_math=numbers_default_to_math,
-                math_inline_delimiters=math_inline_delimiters,
-                math_display_delimiters=math_display_delimiters,
-                page_ranges=page_ranges,
-                enable_spell_check=enable_spell_check,
-                auto_number_sections=auto_number_sections,
-                remove_section_numbering=remove_section_numbering,
-                preserve_section_numbering=preserve_section_numbering,
-                enable_tables_fallback=enable_tables_fallback,
-                fullwidth_punctuation=fullwidth_punctuation,
-            )
-            return ScsFile(auth=self.auth, file_id=submitted_file.file_id, request_options=self.request_options)
-        # Direct multipart upload via POST /files/v1.
-        options: Dict[str, object] = {
-            "metadata": {
-                "mpxpy": True,
-                **(metadata or {})
-            }
-        }
-        if conversion_formats:
-            options["conversion_formats"] = conversion_formats
-        if scs_job_id:
-            options["scs_job_id"] = scs_job_id
-        if destination_s3_uri:
-            options["destination_s3_uri"] = destination_s3_uri
-        if destination_basename:
-            options["destination_basename"] = destination_basename
-        if s3_region:
-            options["s3_region"] = s3_region
-        if image_output_mode:
-            options["image_output_mode"] = image_output_mode
-        if include_page_info is not None:
-            options["include_page_info"] = include_page_info
-        _apply_processing_options(
-            options,
+        resolved_source_uri: Optional[str] = url if url is not None else source_s3_uri
+        submitted_file: File = self.file_new(
+            source_uri=resolved_source_uri,
+            file_path=file_path,
+            job_id=scs_job_id,
+            filename=filename,
+            conversion_formats=conversion_formats,
+            conversion_options=conversion_options,
+            destination_uri=destination_s3_uri,
+            destination_basename=destination_basename,
+            s3_region=s3_region,
+            image_output_mode=image_output_mode,
+            include_page_info=include_page_info,
+            metadata=metadata,
             alphabets_allowed=alphabets_allowed,
             rm_spaces=rm_spaces,
             rm_fonts=rm_fonts,
@@ -1605,31 +1706,7 @@ class MathpixClient:
             enable_tables_fallback=enable_tables_fallback,
             fullwidth_punctuation=fullwidth_punctuation,
         )
-        if conversion_options:
-            options.update(conversion_options)
-        logger.debug(f"Creating new file via files-api multipart: path={file_path}")
-        path: Path = Path(file_path)
-        is_existing_file: bool = path.is_file()
-        if not is_existing_file:
-            logger.error(f"File not found: {file_path}")
-            raise FileNotFoundError(f"File path not found: {file_path}")
-        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1')
-        data: Dict[str, str] = {"options_json": json.dumps(options)}
-        if filename:
-            data["filename"] = filename
-        if scs_job_id:
-            data["scs_job_id"] = scs_job_id
-        with path.open("rb") as f:
-            files: Dict[str, Any] = {"file": f}
-            try:
-                response: requests.Response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
-                response.raise_for_status()
-                response_json: Dict[str, Any] = response.json()
-                file_id: str = response_json['file_id']
-                logger.debug(f"File upload started, file_id: {file_id}")
-                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
-            except requests.exceptions.RequestException as e:
-                raise MathpixClientError(f"Mathpix files-api request failed: {e}")
+        return ScsFile(auth=self.auth, file_id=submitted_file.file_id, request_options=self.request_options)
 
     @deprecated("list_scs_files is deprecated; use file_job_get(job_id).files() instead")
     def list_scs_files(
@@ -1670,7 +1747,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix files-api list request failed: {e}")
 
-    @deprecated("list_scs_jobs is deprecated; use file_jobs_list instead")
+    @deprecated("list_scs_jobs is deprecated; use file_job_list instead")
     def list_scs_jobs(
             self,
             start: Optional[str] = None,
@@ -1680,7 +1757,7 @@ class MathpixClient:
     ):
         """List SCS jobs from files-api v1.
 
-        Deprecated: use file_jobs_list instead, which targets the public
+        Deprecated: use file_job_list instead, which targets the public
         GET /files/v1/jobs endpoint. During the deprecation window this method
         stays on the legacy GET /files/v1/scs-jobs endpoint so existing callers
         keep receiving the legacy job entries and response metadata.

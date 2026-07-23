@@ -132,7 +132,7 @@ def test_file_job_custom_id_idempotency(client: MathpixClient) -> None:
     assert first.file_id == second.file_id
 
 
-def test_file_jobs_list(client: MathpixClient) -> None:
+def test_file_job_list(client: MathpixClient) -> None:
     """A submitted job appears in the jobs listing."""
     job_id = unique_id('mpxpy-list-job')
     client.file_job_new(
@@ -142,7 +142,7 @@ def test_file_jobs_list(client: MathpixClient) -> None:
     found = False
     paging_state = None
     for _ in range(10):
-        result = client.file_jobs_list(limit=100, paging_state=paging_state)
+        result = client.file_job_list(limit=100, paging_state=paging_state)
         if any(job['job_id'] == job_id for job in result['jobs']):
             found = True
             break

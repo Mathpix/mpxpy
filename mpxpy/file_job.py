@@ -1,7 +1,6 @@
-import re
 import time
 from dataclasses import dataclass, asdict
-from typing import Optional, Dict, Any, Iterator, Tuple, Union
+from typing import Optional, Dict, Any, Iterator, Union
 from urllib.parse import urljoin, quote
 import requests
 from mpxpy.auth import Auth
@@ -9,11 +8,6 @@ from mpxpy.file import File
 from mpxpy.logger import logger
 from mpxpy.request_handler import get
 from mpxpy.errors import ValidationError, error_from_response
-
-# Constraint shared by custom_id and Idempotency-Key values.
-CUSTOM_ID_PATTERN: "re.Pattern[str]" = re.compile(r'^[A-Za-z0-9_\-.:]{1,256}$')
-
-JOB_FILE_STATUSES: Tuple[str, ...] = ('pending', 'completed', 'error')
 
 
 @dataclass
@@ -170,12 +164,8 @@ class FileJob:
                 pages remain).
 
         Raises:
-            ValidationError: If status is not one of the allowed values.
-            FilesApiError: If the request fails.
+            FilesApiError: If the request fails (e.g. an unknown status value).
         """
-        is_valid_status: bool = status is None or status in JOB_FILE_STATUSES
-        if not is_valid_status:
-            raise ValidationError(f"status must be one of: {', '.join(JOB_FILE_STATUSES)}")
         logger.debug(f"Listing files for job {self.job_id} (status={status})")
         endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/jobs/{quote(self.job_id, safe="")}/files')
         params: Dict[str, Any] = {}

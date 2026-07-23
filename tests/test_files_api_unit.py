@@ -2,6 +2,7 @@
 
 These tests mock the request layer; no network access is required.
 """
+import json
 from typing import Any, Dict, Iterator, Optional
 from unittest.mock import patch
 import pytest
@@ -111,11 +112,47 @@ def test_file_new_custom_id_requires_job_id(client: MathpixClient) -> None:
         client.file_new(source_uri='s3://b/k.pdf', custom_id='doc-1')
 
 
-def test_file_new_rejects_invalid_identifiers(client: MathpixClient) -> None:
+def test_file_new_requires_exactly_one_source(client: MathpixClient) -> None:
     with pytest.raises(ValidationError):
-        client.file_new(source_uri='s3://b/k.pdf', job_id='j', custom_id='bad id!')
+        client.file_new()
     with pytest.raises(ValidationError):
-        client.file_new(source_uri='s3://b/k.pdf', idempotency_key='x' * 257)
+        client.file_new(source_uri='s3://b/k.pdf', file_path='/tmp/doc.pdf')
+
+
+def test_file_new_local_upload_multipart(client: MathpixClient, tmp_path) -> None:
+    doc = tmp_path / 'doc.pdf'
+    doc.write_bytes(b'%PDF-1.4 test')
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'file_id': 'f-local'})
+        file = client.file_new(
+            file_path=str(doc),
+            job_id='job-1',
+            filename='doc.pdf',
+            destination_uri='s3://bucket/out/',
+            s3_region='us-east-1',
+            include_page_info=True,
+        )
+    assert isinstance(file, File)
+    assert file.file_id == 'f-local'
+    args, kwargs = mock_post.call_args
+    assert args[0].endswith('/files/v1')
+    assert not args[0].endswith('/files/v1/uri')
+    # The multipart endpoint uses the legacy field names
+    options = json.loads(kwargs['data']['options_json'])
+    assert options['scs_job_id'] == 'job-1'
+    assert options['destination_s3_uri'] == 's3://bucket/out/'
+    assert options['s3_region'] == 'us-east-1'
+    assert options['include_page_info'] is True
+    assert kwargs['data']['filename'] == 'doc.pdf'
+
+
+def test_file_new_local_upload_rejects_uri_only_options(client: MathpixClient, tmp_path) -> None:
+    doc = tmp_path / 'doc.pdf'
+    doc.write_bytes(b'%PDF-1.4 test')
+    with pytest.raises(ValidationError):
+        client.file_new(file_path=str(doc), job_id='job-1', custom_id='doc-1')
+    with pytest.raises(ValidationError):
+        client.file_new(file_path=str(doc), idempotency_key='retry-key-1')
 
 
 def test_file_new_raises_files_api_error(client: MathpixClient) -> None:
@@ -211,9 +248,6 @@ def test_file_job_new_validation(client: MathpixClient) -> None:
     # missing source_uri
     with pytest.raises(ValidationError):
         client.file_job_new(files=[{'filename': 'x.pdf'}])
-    # over the per-call ceiling (shared refs keep this cheap)
-    with pytest.raises(ValidationError):
-        client.file_job_new(files=[{'source_uri': 's3://b/k'}] * 200_001)
 
 
 def test_file_job_new_rejects_reserved_conversion_options(client: MathpixClient) -> None:
@@ -237,22 +271,66 @@ def test_file_job_new_idempotency_key_header(client: MathpixClient) -> None:
     assert kwargs['headers']['Idempotency-Key'] == 'batch-key-1'
 
 
-# file_jobs_list
+# file_job_list
 
-def test_file_jobs_list_params(client: MathpixClient) -> None:
+def test_file_job_list_params(client: MathpixClient) -> None:
     with patch('mpxpy.mathpix_client.get') as mock_get:
         mock_get.return_value = FakeResponse(json_body={'jobs': [], 'next_page_token': None})
-        result = client.file_jobs_list(start='2026-07-01', end='2026-07-31', limit=50, paging_state='cursor')
+        result = client.file_job_list(start='2026-07-01', end='2026-07-31', limit=50, paging_state='cursor')
     assert result == {'jobs': [], 'next_page_token': None}
     args, kwargs = mock_get.call_args
     assert args[0].endswith('/files/v1/jobs')
     assert kwargs['params'] == {'limit': 50, 'start': '2026-07-01', 'end': '2026-07-31', 'paging_state': 'cursor'}
 
 
+# file_get / file_job_get fetch semantics
+
+def test_file_get_fetches_and_seeds_status(client: MathpixClient) -> None:
+    status_body = {'file_id': 'f-1', 'status': 'completed', 'custom_id': 'doc-1', 'num_pages': 4}
+    with patch('mpxpy.file.get') as mock_get:
+        mock_get.return_value = FakeResponse(json_body=status_body)
+        file = client.file_get('f-1')
+    assert isinstance(file, File)
+    args, _ = mock_get.call_args
+    assert args[0].endswith('/files/v1/f-1')
+    # Seeded from the fetch; no extra status request needed
+    assert file.custom_id == 'doc-1'
+    assert file.num_pages == 4
+    assert mock_get.call_count == 1
+
+
+def test_file_get_unknown_id_raises(client: MathpixClient) -> None:
+    with patch('mpxpy.file.get') as mock_get:
+        mock_get.return_value = FakeResponse(status_code=404, json_body={'error': 'not_found'})
+        with pytest.raises(FilesApiError) as exc_info:
+            client.file_get('f-missing')
+    assert exc_info.value.error_id == 'not_found'
+
+
+def test_file_job_get_fetches_and_seeds_file_count(client: MathpixClient) -> None:
+    with patch('mpxpy.file_job.get') as mock_get:
+        mock_get.return_value = FakeResponse(
+            json_body={'job_id': 'job-1', 'status': 'completed', 'file_count': 7},
+        )
+        job = client.file_job_get('job-1')
+    assert isinstance(job, FileJob)
+    assert job.file_count == 7
+    args, _ = mock_get.call_args
+    assert args[0].endswith('/files/v1/jobs/job-1')
+
+
+def test_file_job_get_unknown_id_raises(client: MathpixClient) -> None:
+    with patch('mpxpy.file_job.get') as mock_get:
+        mock_get.return_value = FakeResponse(status_code=404, json_body={'error': 'not_found'})
+        with pytest.raises(FilesApiError) as exc_info:
+            client.file_job_get('job-missing')
+    assert exc_info.value.error_id == 'not_found'
+
+
 # FileJob
 
 def test_file_job_status_endpoint(client: MathpixClient) -> None:
-    job = client.file_job_get('job-1')
+    job = FileJob(auth=client.auth, job_id='job-1')
     with patch('mpxpy.file_job.get') as mock_get:
         mock_get.return_value = FakeResponse(json_body={'job_id': 'job-1', 'status': 'completed'})
         status = job.status()
@@ -261,14 +339,18 @@ def test_file_job_status_endpoint(client: MathpixClient) -> None:
     assert args[0].endswith('/files/v1/jobs/job-1')
 
 
-def test_file_job_files_status_filter_validation(client: MathpixClient) -> None:
-    job = client.file_job_get('job-1')
-    with pytest.raises(ValidationError):
-        job.files(status='processing')
+def test_file_job_files_status_filter_passthrough(client: MathpixClient) -> None:
+    # Filter values are the server's contract; the client passes them through
+    job = FileJob(auth=client.auth, job_id='job-1')
+    with patch('mpxpy.file_job.get') as mock_get:
+        mock_get.return_value = FakeResponse(json_body={'files': [], 'next_page_token': None})
+        job.files(status='error')
+    _, kwargs = mock_get.call_args
+    assert kwargs['params'] == {'status': 'error'}
 
 
 def test_file_job_files_iter_pagination(client: MathpixClient) -> None:
-    job = client.file_job_get('job-1')
+    job = FileJob(auth=client.auth, job_id='job-1')
     pages = [
         FakeResponse(json_body={'files': [{'file_id': 'f1'}, {'file_id': 'f2'}], 'next_page_token': 'p2'}),
         FakeResponse(json_body={'files': [{'file_id': 'f3'}], 'next_page_token': None}),
@@ -284,7 +366,7 @@ def test_file_job_files_iter_pagination(client: MathpixClient) -> None:
 
 
 def test_file_job_file_by_custom_id(client: MathpixClient) -> None:
-    job = client.file_job_get('job-1')
+    job = FileJob(auth=client.auth, job_id='job-1')
     status_body = {'file_id': 'f-9', 'status': 'completed', 'custom_id': 'doc-9', 'num_pages': 3}
     with patch('mpxpy.file_job.get') as mock_get:
         mock_get.return_value = FakeResponse(json_body=status_body)
@@ -299,7 +381,7 @@ def test_file_job_file_by_custom_id(client: MathpixClient) -> None:
 
 
 def test_file_job_file_by_custom_id_not_found(client: MathpixClient) -> None:
-    job = client.file_job_get('job-1')
+    job = FileJob(auth=client.auth, job_id='job-1')
     with patch('mpxpy.file_job.get') as mock_get:
         mock_get.return_value = FakeResponse(status_code=404, json_body={'error': 'not_found'})
         with pytest.raises(FilesApiError) as exc_info:
@@ -310,7 +392,7 @@ def test_file_job_file_by_custom_id_not_found(client: MathpixClient) -> None:
 # File.status
 
 def test_file_status_raises_on_error_response(client: MathpixClient) -> None:
-    file = client.file_get('f-missing')
+    file = File(auth=client.auth, file_id='f-missing')
     with patch('mpxpy.file.get') as mock_get:
         mock_get.return_value = FakeResponse(status_code=404, json_body={'error': 'not_found'})
         with pytest.raises(FilesApiError) as exc_info:
@@ -319,7 +401,7 @@ def test_file_status_raises_on_error_response(client: MathpixClient) -> None:
 
 
 def test_file_status_non_envelope_error_is_client_error(client: MathpixClient) -> None:
-    file = client.file_get('f-1')
+    file = File(auth=client.auth, file_id='f-1')
     with patch('mpxpy.file.get') as mock_get:
         mock_get.return_value = FakeResponse(status_code=500, text='oops')
         with pytest.raises(MathpixClientError) as exc_info:
@@ -330,7 +412,7 @@ def test_file_status_non_envelope_error_is_client_error(client: MathpixClient) -
 # File downloads: error disambiguation
 
 def test_download_format_not_ready_is_conversion_incomplete(client: MathpixClient) -> None:
-    file = client.file_get('f-1')
+    file = File(auth=client.auth, file_id='f-1')
     with patch('mpxpy.file.get') as mock_get:
         mock_get.return_value = FakeResponse(
             status_code=404,
@@ -341,7 +423,7 @@ def test_download_format_not_ready_is_conversion_incomplete(client: MathpixClien
 
 
 def test_download_not_found_is_client_error(client: MathpixClient) -> None:
-    file = client.file_get('f-1')
+    file = File(auth=client.auth, file_id='f-1')
     with patch('mpxpy.file.get') as mock_get:
         mock_get.return_value = FakeResponse(status_code=404, json_body={'error': 'not_found'})
         with pytest.raises(MathpixClientError) as exc_info:
@@ -350,7 +432,7 @@ def test_download_not_found_is_client_error(client: MathpixClient) -> None:
 
 
 def test_download_unsupported_format_is_validation_error(client: MathpixClient) -> None:
-    file = client.file_get('f-1')
+    file = File(auth=client.auth, file_id='f-1')
     with patch('mpxpy.file.get') as mock_get:
         mock_get.return_value = FakeResponse(status_code=415, json_body={'error': 'unsupported_format'})
         with pytest.raises(ValidationError):
@@ -358,7 +440,7 @@ def test_download_unsupported_format_is_validation_error(client: MathpixClient) 
 
 
 def test_download_legacy_409_is_conversion_incomplete(client: MathpixClient) -> None:
-    file = client.file_get('f-1')
+    file = File(auth=client.auth, file_id='f-1')
     with patch('mpxpy.file.get') as mock_get:
         mock_get.return_value = FakeResponse(status_code=409)
         with pytest.raises(ConversionIncompleteError):
@@ -368,7 +450,7 @@ def test_download_legacy_409_is_conversion_incomplete(client: MathpixClient) -> 
 # File.delete
 
 def test_file_delete_success(client: MathpixClient) -> None:
-    file = client.file_get('f-1')
+    file = File(auth=client.auth, file_id='f-1')
     with patch('mpxpy.file.delete') as mock_delete:
         mock_delete.return_value = FakeResponse(json_body={'file_id': 'f-1', 'status': 'deleted'})
         result = file.delete()
@@ -378,7 +460,7 @@ def test_file_delete_success(client: MathpixClient) -> None:
 
 
 def test_file_delete_conflict_while_processing(client: MathpixClient) -> None:
-    file = client.file_get('f-1')
+    file = File(auth=client.auth, file_id='f-1')
     with patch('mpxpy.file.delete') as mock_delete:
         mock_delete.return_value = FakeResponse(
             status_code=409,
