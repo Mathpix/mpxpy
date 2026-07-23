@@ -821,8 +821,8 @@ class MathpixClient:
                 both a (job_id, custom_id) pair and an idempotency_key are present,
                 the pair takes precedence. Not supported for local file_path
                 uploads.
-            filename: Optional display name for the file (defaults to a name
-                derived from source_uri).
+            filename: Optional display name for the file (defaults to
+                '<file_id>.pdf').
             conversion_formats: Dict of format names to enable (e.g., {'docx': True,
                 'md': True}). Mathpix Markdown (mmd) is always produced.
             conversion_options: Additional request options dict, merged into the
