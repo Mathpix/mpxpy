@@ -8,7 +8,7 @@ from mpxpy.auth import Auth
 from mpxpy.file import File
 from mpxpy.logger import logger
 from mpxpy.request_handler import get
-from mpxpy.errors import ValidationError, FilesApiError
+from mpxpy.errors import ValidationError, error_from_response
 
 # Constraint shared by custom_id and Idempotency-Key values.
 CUSTOM_ID_PATTERN: "re.Pattern[str]" = re.compile(r'^[A-Za-z0-9_\-.:]{1,256}$')
@@ -108,7 +108,7 @@ class FileJob:
         response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
         has_failed: bool = not response.ok
         if has_failed:
-            raise FilesApiError.from_response(response)
+            raise error_from_response(response)
         return response.json()
 
     def wait_until_complete(self, timeout: int, interval: float = 5.0) -> bool:
@@ -188,7 +188,7 @@ class FileJob:
         response: requests.Response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
         has_failed: bool = not response.ok
         if has_failed:
-            raise FilesApiError.from_response(response)
+            raise error_from_response(response)
         return response.json()
 
     def files_iter(
@@ -244,7 +244,7 @@ class FileJob:
         response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
         has_failed: bool = not response.ok
         if has_failed:
-            raise FilesApiError.from_response(response)
+            raise error_from_response(response)
         result: Dict[str, Any] = response.json()
         return File(
             auth=self.auth,

@@ -7,7 +7,14 @@ import requests
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
 from mpxpy.request_handler import get, delete
-from mpxpy.errors import FilesystemError, ValidationError, ConversionIncompleteError, MathpixClientError, FilesApiError
+from mpxpy.errors import (
+    FilesystemError,
+    ValidationError,
+    ConversionIncompleteError,
+    MathpixClientError,
+    error_from_response,
+    parse_files_api_error_envelope,
+)
 
 
 class File:
@@ -196,10 +203,18 @@ class File:
                 - formats: Dict of per-format conversion statuses
                 - filename, custom_id, destination_uri, destination_basename, format_primary
                 - error, error_info: present when status is 'error'
+
+        Raises:
+            FilesApiError: If the file does not exist ('not_found') or belongs to
+                a different group ('forbidden').
+            MathpixClientError: If the request fails without a Files API error body.
         """
         logger.debug(f"Getting status for file {self.file_id}")
         endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}')
         response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+        has_failed: bool = not response.ok
+        if has_failed:
+            raise error_from_response(response)
         result: Dict[str, Any] = response.json()
         self._last_status = result
         return result
@@ -224,7 +239,7 @@ class File:
         response: requests.Response = delete(endpoint, headers=self.auth.headers, **self.request_options)
         has_failed: bool = not response.ok
         if has_failed:
-            raise FilesApiError.from_response(response)
+            raise error_from_response(response)
         return response.json()
 
     def _check_download_response(self, response: requests.Response) -> None:
@@ -234,17 +249,14 @@ class File:
         error body of 'format_not_ready'; a plain 'not_found' 404 means the file id
         does not exist; 415 'unsupported_format' means the extension was never
         requested. A 409 is also treated as format-not-ready for compatibility with
-        older deployments.
+        older deployments. Any other failure raises FilesApiError when the body is
+        a Files API error envelope, and MathpixClientError otherwise.
         """
         is_success: bool = response.ok
         if is_success:
             return
-        error_id: Optional[str] = None
-        try:
-            body: Dict[str, Any] = response.json()
-            error_id = body.get('error') or (body.get('error_info') or {}).get('id')
-        except ValueError:
-            pass
+        envelope: Optional[Dict[str, Any]] = parse_files_api_error_envelope(response)
+        error_id: Optional[str] = envelope['error_id'] if envelope is not None else None
         is_unsupported_format: bool = response.status_code == 415 or error_id == 'unsupported_format'
         if is_unsupported_format:
             raise ValidationError(f"Format was not requested or is not supported: {error_id or response.status_code}")
@@ -254,10 +266,7 @@ class File:
         is_missing_file: bool = error_id == 'not_found'
         if is_missing_file:
             raise MathpixClientError(f"File not found: {self.file_id}")
-        is_unparsed_not_found: bool = response.status_code == 404
-        if is_unparsed_not_found:
-            raise ConversionIncompleteError("File not found")
-        raise FilesApiError.from_response(response)
+        raise error_from_response(response)
 
     def save_file(self, path: str, conversion_format: str) -> str:
         """Helper function to save the processed file result to a local path.

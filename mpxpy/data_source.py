@@ -4,7 +4,7 @@ import requests
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
 from mpxpy.request_handler import post, delete
-from mpxpy.errors import ValidationError, FilesApiError
+from mpxpy.errors import ValidationError, error_from_response
 
 PROVIDERS: Tuple[str, ...] = ('aws', 'azure', 'gcp')
 
@@ -80,7 +80,7 @@ class DataSource:
         response: requests.Response = post(endpoint, headers=self.auth.headers, **self.request_options)
         has_failed: bool = not response.ok
         if has_failed:
-            raise FilesApiError.from_response(response)
+            raise error_from_response(response)
         return response.json()
 
     def delete(self) -> Dict[str, Any]:
@@ -108,5 +108,5 @@ class DataSource:
         response: requests.Response = delete(endpoint, headers=self.auth.headers, **self.request_options)
         has_failed: bool = not response.ok
         if has_failed:
-            raise FilesApiError.from_response(response)
+            raise error_from_response(response)
         return response.json()

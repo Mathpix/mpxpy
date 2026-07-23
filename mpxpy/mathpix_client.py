@@ -11,6 +11,7 @@ from urllib.parse import urljoin
 from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.file import File
+from mpxpy.scs_file import ScsFile
 from mpxpy.file_batch import FileBatch
 from mpxpy.file_job import FileJob, FileSubmission, CUSTOM_ID_PATTERN, normalize_file_submission
 from mpxpy.data_source import DataSource, PROVIDERS, AUTH_METHODS_BY_PROVIDER
@@ -18,7 +19,7 @@ from mpxpy.conversion import Conversion
 from mpxpy.batch import Batch
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
-from mpxpy.errors import MathpixClientError, ValidationError, FilesApiError
+from mpxpy.errors import MathpixClientError, ValidationError, FilesApiError, error_from_response
 from mpxpy.request_handler import post, get
 
 # Ceiling on items per POST /files/v1/jobs call.
@@ -87,6 +88,27 @@ def _apply_processing_options(
         options["enable_tables_fallback"] = enable_tables_fallback
     if fullwidth_punctuation:
         options["fullwidth_punctuation"] = fullwidth_punctuation
+
+
+def _reject_reserved_conversion_options(
+        conversion_options: Optional[Dict[str, object]],
+        reserved: Set[str],
+) -> None:
+    """Reject conversion_options keys that would override validated request fields.
+
+    The conversion_options pass-through is merged into the request body after the
+    explicit arguments, so without this check a caller could silently replace
+    fields the method has already validated (e.g. source_uri, files, custom_id).
+    """
+    has_conversion_options: bool = bool(conversion_options)
+    if not has_conversion_options:
+        return
+    conflicting: Set[str] = reserved.intersection(conversion_options or {})
+    has_conflicts: bool = bool(conflicting)
+    if has_conflicts:
+        raise ValidationError(
+            f"conversion_options may not override validated request fields: {', '.join(sorted(conflicting))}"
+        )
 
 
 class MathpixClient:
@@ -746,11 +768,14 @@ class MathpixClient:
             job_id: Optional[str] = None,
             custom_id: Optional[str] = None,
             idempotency_key: Optional[str] = None,
+            filename: Optional[str] = None,
             conversion_formats: Optional[Dict[str, bool]] = None,
             conversion_options: Optional[Dict[str, object]] = None,
             destination_uri: Optional[str] = None,
             destination_basename: Optional[str] = None,
+            s3_region: Optional[str] = None,
             image_output_mode: Optional[str] = None,
+            include_page_info: Optional[bool] = None,
             metadata: Optional[Dict[str, object]] = None,
             alphabets_allowed: Optional[Dict[str, str]] = None,
             rm_spaces: Optional[bool] = True,
@@ -794,18 +819,23 @@ class MathpixClient:
                 returns the original file_id instead of creating a duplicate. If
                 both a (job_id, custom_id) pair and an idempotency_key are present,
                 the pair takes precedence.
+            filename: Optional display name for the file (defaults to a name
+                derived from source_uri).
             conversion_formats: Dict of format names to enable (e.g., {'docx': True,
                 'md': True}). Mathpix Markdown (mmd) is always produced.
             conversion_options: Additional request options dict, merged into the
-                request body last.
+                request body last. May not override the validated request fields
+                source_uri, job_id, custom_id, or metadata.
             destination_uri: Optional destination for results. Same scheme rules as
                 source_uri; must be backed by a registered data source. When omitted,
                 results stay in Mathpix storage and are fetched via the download
                 helpers on File.
             destination_basename: Optional basename for output objects within
                 destination_uri (defaults to the file_id).
+            s3_region: Optional region of the destination_uri S3 bucket.
             image_output_mode: Set to 'local' to write cropped images into
                 destination_uri storage under images/, instead of the Mathpix CDN.
+            include_page_info: Include per-page information in the output.
             metadata: Optional dict to attach metadata to the request.
             alphabets_allowed: Optional dict to list alphabets allowed in the output.
             rm_spaces: Remove extra white space from equations (default True).
@@ -831,13 +861,15 @@ class MathpixClient:
 
         Raises:
             ValidationError: If source_uri is empty, custom_id is supplied without
-                job_id, or an identifier fails the charset/length constraint.
+                job_id, an identifier fails the charset/length constraint, or
+                conversion_options contains a reserved request field.
             FilesApiError: If the API rejects the submission.
             MathpixClientError: If the request fails.
         """
         has_source_uri: bool = bool(source_uri)
         if not has_source_uri:
             raise ValidationError("source_uri is required")
+        _reject_reserved_conversion_options(conversion_options, {'source_uri', 'job_id', 'custom_id', 'metadata'})
         has_custom_id: bool = custom_id is not None
         if has_custom_id:
             has_job_id: bool = job_id is not None
@@ -853,19 +885,23 @@ class MathpixClient:
                 raise ValidationError("idempotency_key must be at most 256 characters from [A-Za-z0-9_-.:]")
         options: Dict[str, object] = {
             "source_uri": source_uri,
-            "metadata": {
-                "mpxpy": True,
-                **(metadata or {})
-            }
         }
+        if metadata:
+            options["metadata"] = metadata
+        if filename:
+            options["filename"] = filename
         if conversion_formats:
             options["conversion_formats"] = conversion_formats
         if destination_uri:
             options["destination_uri"] = destination_uri
         if destination_basename:
             options["destination_basename"] = destination_basename
+        if s3_region:
+            options["s3_region"] = s3_region
         if image_output_mode:
             options["image_output_mode"] = image_output_mode
+        if include_page_info is not None:
+            options["include_page_info"] = include_page_info
         if custom_id:
             options["custom_id"] = custom_id
         if job_id:
@@ -902,7 +938,7 @@ class MathpixClient:
             response: requests.Response = post(endpoint, json=options, headers=headers, **self.request_options)
             has_failed: bool = not response.ok
             if has_failed:
-                raise FilesApiError.from_response(response)
+                raise error_from_response(response)
             response_json: Dict[str, Any] = response.json()
             file_id: str = response_json['file_id']
             logger.debug(f"File from URI started, file_id: {file_id}")
@@ -966,7 +1002,8 @@ class MathpixClient:
             conversion_formats: Job-wide conversion formats, applied to every file
                 (e.g., {'docx': True, 'md': True}).
             conversion_options: Additional request options dict, merged into the
-                request body last.
+                request body last. May not override the validated request fields
+                files, job_id, or metadata.
             image_output_mode: Job-wide. Set to 'local' to write cropped images
                 into each file's destination_uri storage. Applies only to files
                 that set a destination_uri.
@@ -996,14 +1033,16 @@ class MathpixClient:
         Raises:
             ValidationError: If files is empty or over the 200,000-item ceiling,
                 an item is malformed or missing source_uri, a custom_id fails the
-                charset/length constraint or is duplicated within the batch, or any
-                custom_id is supplied without an explicit job_id.
+                charset/length constraint or is duplicated within the batch, any
+                custom_id is supplied without an explicit job_id, or
+                conversion_options contains a reserved request field.
             FilesApiError: If the API rejects the submission.
             MathpixClientError: If the request fails.
         """
         has_files: bool = bool(files)
         if not has_files:
             raise ValidationError("files must be a non-empty list")
+        _reject_reserved_conversion_options(conversion_options, {'files', 'job_id', 'metadata'})
         is_over_ceiling: bool = len(files) > MAX_JOB_FILES
         if is_over_ceiling:
             raise ValidationError(f"files exceeds the {MAX_JOB_FILES} items-per-call ceiling: {len(files)}")
@@ -1037,11 +1076,9 @@ class MathpixClient:
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/jobs')
         body: Dict[str, Any] = {
             "files": normalized,
-            "metadata": {
-                "mpxpy": True,
-                **(metadata or {})
-            }
         }
+        if metadata:
+            body["metadata"] = metadata
         if job_id:
             body["job_id"] = job_id
         if conversion_formats:
@@ -1077,7 +1114,7 @@ class MathpixClient:
             response: requests.Response = post(endpoint, json=body, headers=headers, **self.request_options)
             has_failed: bool = not response.ok
             if has_failed:
-                raise FilesApiError.from_response(response)
+                raise error_from_response(response)
             response_json: Dict[str, Any] = response.json()
             response_job_id: str = response_json['job_id']
             logger.debug(f"Job accepted, job_id: {response_job_id}")
@@ -1128,7 +1165,7 @@ class MathpixClient:
             response: requests.Response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
             has_failed: bool = not response.ok
             if has_failed:
-                raise FilesApiError.from_response(response)
+                raise error_from_response(response)
             return response.json()
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix Files API list jobs request failed: {e}")
@@ -1204,7 +1241,7 @@ class MathpixClient:
             response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
             has_failed: bool = not response.ok
             if has_failed:
-                raise FilesApiError.from_response(response)
+                raise error_from_response(response)
             return response.json()
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix onboarding identities request failed: {e}")
@@ -1323,7 +1360,7 @@ class MathpixClient:
                 )
             has_failed: bool = not response.ok
             if has_failed:
-                raise FilesApiError.from_response(response)
+                raise error_from_response(response)
             response_json: Dict[str, Any] = response.json()
             data_source_id: str = response_json['data_source_id']
             logger.debug(f"Data source registered, data_source_id: {data_source_id}")
@@ -1350,7 +1387,7 @@ class MathpixClient:
             response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
             has_failed: bool = not response.ok
             if has_failed:
-                raise FilesApiError.from_response(response)
+                raise error_from_response(response)
             return response.json()
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix data sources list request failed: {e}")
@@ -1439,7 +1476,7 @@ class MathpixClient:
             preserve_section_numbering: Optional[bool] = True,
             enable_tables_fallback: Optional[bool] = False,
             fullwidth_punctuation: Optional[bool] = None,
-    ):
+    ) -> ScsFile:
         """Upload a file via files-api v1 for async processing.
 
         Deprecated: use file_new(source_uri=...) instead. url and source_s3_uri
@@ -1450,15 +1487,15 @@ class MathpixClient:
             file_path: Path to a local file to upload via multipart POST /files/v1.
             url: URL of a remote file, forwarded as source_uri.
             source_s3_uri: S3 URI (s3://bucket/key), forwarded as source_uri.
-            filename: Optional filename for multipart uploads (ignored for url/source_s3_uri).
+            filename: Optional display name for the file.
             scs_job_id: Forwarded as job_id.
             conversion_formats: Dict of format names to enable (e.g., {'mmd': True, 'docx': True}).
             conversion_options: Additional conversion options dict.
             destination_s3_uri: Forwarded as destination_uri.
             destination_basename: Optional basename for output files (defaults to file_id).
-            s3_region: Region for multipart uploads (ignored for url/source_s3_uri).
+            s3_region: Region of the destination_s3_uri bucket.
             image_output_mode: Image output mode (e.g., 'local').
-            include_page_info: Forwarded via conversion_options.
+            include_page_info: Include per-page information in the output.
             metadata: Optional dict to attach metadata to the request.
             alphabets_allowed: Optional dict to list alphabets allowed in the output.
             rm_spaces: Remove extra white space from equations (default True).
@@ -1479,6 +1516,9 @@ class MathpixClient:
             enable_tables_fallback: Enable advanced table processing (default False).
             fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
 
+        Returns:
+            ScsFile: A new ScsFile instance for polling status and downloading results.
+
         Raises:
             ValidationError: If not exactly one of file_path, url, or source_s3_uri is provided.
             FileNotFoundError: If the specified file_path does not exist.
@@ -1489,21 +1529,19 @@ class MathpixClient:
         if not has_exactly_one_source:
             logger.error("Invalid parameters: Exactly one of file_path, url, or source_s3_uri must be provided")
             raise ValidationError("Exactly one of file_path, url, or source_s3_uri must be provided")
-        merged_conversion_options: Dict[str, object] = dict(conversion_options or {})
-        has_include_page_info: bool = include_page_info is not None
-        if has_include_page_info:
-            merged_conversion_options["include_page_info"] = include_page_info
-        is_remote_submission: bool = file_path is None
-        if is_remote_submission:
+        if file_path is None:
             resolved_source_uri: str = url if url is not None else str(source_s3_uri)
-            return self.file_new(
+            submitted_file: File = self.file_new(
                 source_uri=resolved_source_uri,
                 job_id=scs_job_id,
+                filename=filename,
                 conversion_formats=conversion_formats,
-                conversion_options=merged_conversion_options or None,
+                conversion_options=conversion_options,
                 destination_uri=destination_s3_uri,
                 destination_basename=destination_basename,
+                s3_region=s3_region,
                 image_output_mode=image_output_mode,
+                include_page_info=include_page_info,
                 metadata=metadata,
                 alphabets_allowed=alphabets_allowed,
                 rm_spaces=rm_spaces,
@@ -1524,6 +1562,7 @@ class MathpixClient:
                 enable_tables_fallback=enable_tables_fallback,
                 fullwidth_punctuation=fullwidth_punctuation,
             )
+            return ScsFile(auth=self.auth, file_id=submitted_file.file_id, request_options=self.request_options)
         # Direct multipart upload via POST /files/v1.
         options: Dict[str, object] = {
             "metadata": {
@@ -1543,6 +1582,8 @@ class MathpixClient:
             options["s3_region"] = s3_region
         if image_output_mode:
             options["image_output_mode"] = image_output_mode
+        if include_page_info is not None:
+            options["include_page_info"] = include_page_info
         _apply_processing_options(
             options,
             alphabets_allowed=alphabets_allowed,
@@ -1564,8 +1605,8 @@ class MathpixClient:
             enable_tables_fallback=enable_tables_fallback,
             fullwidth_punctuation=fullwidth_punctuation,
         )
-        if merged_conversion_options:
-            options.update(merged_conversion_options)
+        if conversion_options:
+            options.update(conversion_options)
         logger.debug(f"Creating new file via files-api multipart: path={file_path}")
         path: Path = Path(file_path)
         is_existing_file: bool = path.is_file()
@@ -1586,7 +1627,7 @@ class MathpixClient:
                 response_json: Dict[str, Any] = response.json()
                 file_id: str = response_json['file_id']
                 logger.debug(f"File upload started, file_id: {file_id}")
-                return File(auth=self.auth, file_id=file_id, request_options=self.request_options)
+                return ScsFile(auth=self.auth, file_id=file_id, request_options=self.request_options)
             except requests.exceptions.RequestException as e:
                 raise MathpixClientError(f"Mathpix files-api request failed: {e}")
 
@@ -1640,7 +1681,9 @@ class MathpixClient:
         """List SCS jobs from files-api v1.
 
         Deprecated: use file_jobs_list instead, which targets the public
-        GET /files/v1/jobs endpoint.
+        GET /files/v1/jobs endpoint. During the deprecation window this method
+        stays on the legacy GET /files/v1/scs-jobs endpoint so existing callers
+        keep receiving the legacy job entries and response metadata.
 
         Args:
             start: Optional start date filter (ISO format).
@@ -1649,18 +1692,32 @@ class MathpixClient:
             paging_state: Optional paging state for pagination.
 
         Returns:
-            dict: Response containing 'jobs' list and 'next_page_token' for pagination.
+            dict: Response containing 'jobs' list and optionally 'paging_state' for next page.
         """
-        return self.file_jobs_list(start=start, end=end, limit=limit, paging_state=paging_state)
+        logger.debug("Listing jobs from files-api")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs')
+        params: Dict[str, object] = {"limit": limit}
+        if start:
+            params["start"] = start
+        if end:
+            params["end"] = end
+        if paging_state:
+            params["paging_state"] = paging_state
+        try:
+            response: requests.Response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api list jobs request failed: {e}")
 
     @deprecated("scs_job_status is deprecated; use file_job_get(job_id).status() instead")
     def scs_job_status(self, scs_job_id: str):
         """Get the current status of an SCS job.
 
         Deprecated: use file_job_get(job_id).status() instead, which targets the
-        public GET /files/v1/jobs/{job_id} endpoint. Note the response shape
-        follows that endpoint (job_id, status, file_count, files_completed,
-        files_errored, created_at, modified_at).
+        public GET /files/v1/jobs/{job_id} endpoint. During the deprecation
+        window this method stays on the legacy GET /files/v1/scs-jobs/status
+        endpoint so existing callers keep receiving the legacy response shape.
 
         Args:
             scs_job_id: The job ID to get status for.
@@ -1668,7 +1725,15 @@ class MathpixClient:
         Returns:
             JSON response containing job status information.
         """
-        return self.file_job_get(scs_job_id).status()
+        logger.debug(f"Getting status for SCS job {scs_job_id}")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/scs-jobs/status')
+        params: Dict[str, str] = {'scs_job_id': scs_job_id}
+        try:
+            response: requests.Response = get(endpoint, headers=self.auth.headers, params=params, **self.request_options)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix files-api job status request failed: {e}")
 
     def query_usage(
             self,
