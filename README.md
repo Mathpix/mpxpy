@@ -434,25 +434,29 @@ Batch submission is accept-and-defer: the call returns immediately and per-item 
 
 ##### `MathpixClient.file_new`
 
-Submit a single document by remote URI for async processing (`POST /files/v1/uri`). Returns a `File` instance.
+Submit a single document for async processing, from a remote URI (`POST /files/v1/uri`) or a local file (multipart upload). Returns a `File` instance.
 
 ###### `MathpixClient.file_new` Arguments
 
-- `source_uri`: Remote location of the source document (`s3://`, `gs://`, public `https://`, or Azure Blob HTTPS URL). Required.
+- `source_uri`: Remote location of the source document (`s3://`, `gs://`, public `https://`, or Azure Blob HTTPS URL). Exactly one of `source_uri` or `file_path` is required.
+- `file_path`: Path to a local file to upload.
 - `job_id`: Optional job to associate this file with. Required whenever `custom_id` is supplied.
-- `custom_id`: Optional customer-supplied identifier (max 256 chars, `[A-Za-z0-9_-.:]`). `(job_id, custom_id)` is the idempotency key: re-submitting the same pair returns the original file.
-- `idempotency_key`: Optional client-generated key sent as the `Idempotency-Key` header; makes a standalone submission safe to retry.
+- `custom_id`: Optional customer-supplied identifier (max 256 chars, `[A-Za-z0-9_-.:]`). `(job_id, custom_id)` is the idempotency key: re-submitting the same pair returns the original file. Remote submissions only.
+- `idempotency_key`: Optional client-generated key sent as the `Idempotency-Key` header; makes a standalone submission safe to retry. Remote submissions only.
+- `filename`: Optional display name for the file.
 - `conversion_formats`: Dict of format names to enable (e.g., `{'docx': True, 'md': True}`). Mathpix Markdown (`mmd`) is always produced.
 - `conversion_options`: Additional request options dict.
 - `destination_uri`: Optional destination for results; must be backed by a registered data source. When omitted, results stay in Mathpix storage and are fetched via the download helpers.
 - `destination_basename`: Optional basename for output objects (defaults to the file_id).
+- `s3_region`: Optional region of the `destination_uri` S3 bucket.
 - `image_output_mode`: Set to `'local'` to write cropped images into `destination_uri` storage instead of the Mathpix CDN.
+- `include_page_info`: Include per-page information in the output.
 - `metadata`: Optional dict to attach metadata to the request.
 - Plus the same OCR options as `pdf_new` (`alphabets_allowed`, `rm_spaces`, `include_smiles`, `math_inline_delimiters`, `page_ranges`, etc.).
 
 ##### `MathpixClient.file_job_new`
 
-Submit a batch of up to 200,000 documents in one call. Returns a `FileJob` instance.
+Submit a batch of documents in one call (the server enforces an items-per-call ceiling, currently 200,000). Returns a `FileJob` instance.
 
 ###### `MathpixClient.file_job_new` Arguments
 
@@ -464,11 +468,11 @@ Submit a batch of up to 200,000 documents in one call. Returns a `FileJob` insta
 - `metadata`: Optional dict to attach metadata to the request.
 - Plus the same OCR options as `pdf_new`, applied to every file in the request.
 
-##### `MathpixClient.file_jobs_list`
+##### `MathpixClient.file_job_list`
 
 List submitted jobs, newest first. Returns a dict with `jobs` and `next_page_token`.
 
-###### `MathpixClient.file_jobs_list` Arguments
+###### `MathpixClient.file_job_list` Arguments
 
 - `start`: Earliest submission date to include, `yyyy-MM-dd` (UTC).
 - `end`: Latest submission date to include, `yyyy-MM-dd` (UTC).
@@ -477,9 +481,9 @@ List submitted jobs, newest first. Returns a dict with `jobs` and `next_page_tok
 
 ##### `MathpixClient.file_get` / `MathpixClient.file_delete` / `MathpixClient.file_job_get`
 
-- `file_get(file_id)`: Returns a `File` handle for an existing file.
+- `file_get(file_id)`: Fetches an existing file and returns a `File` instance seeded with its status; raises `FilesApiError` for unknown ids.
 - `file_delete(file_id)`: Permanently removes a file and its results from Mathpix-owned storage. Only files in a terminal state can be deleted; repeat deletes are idempotent.
-- `file_job_get(job_id)`: Returns a `FileJob` handle for an existing job.
+- `file_job_get(job_id)`: Fetches an existing job and returns a `FileJob` instance seeded with its `file_count`; raises `FilesApiError` for unknown ids.
 
 ##### `File`
 
