@@ -138,13 +138,14 @@ def test_file_new_local_upload_multipart(client: MathpixClient, tmp_path) -> Non
     args, kwargs = mock_post.call_args
     assert args[0].endswith('/files/v1')
     assert not args[0].endswith('/files/v1/uri')
-    # The multipart endpoint uses the legacy field names
+    # job_id and filename travel as form fields; the rest in options_json
+    assert kwargs['data']['job_id'] == 'job-1'
+    assert kwargs['data']['filename'] == 'doc.pdf'
     options = json.loads(kwargs['data']['options_json'])
-    assert options['scs_job_id'] == 'job-1'
-    assert options['destination_s3_uri'] == 's3://bucket/out/'
+    assert options['destination_uri'] == 's3://bucket/out/'
     assert options['s3_region'] == 'us-east-1'
     assert options['include_page_info'] is True
-    assert kwargs['data']['filename'] == 'doc.pdf'
+    assert 'scs_job_id' not in options
 
 
 def test_file_new_local_upload_forwards_custom_id_and_idempotency_key(client: MathpixClient, tmp_path) -> None:
@@ -162,7 +163,7 @@ def test_file_new_local_upload_forwards_custom_id_and_idempotency_key(client: Ma
         )
     _, kwargs = mock_post.call_args
     assert kwargs['data']['custom_id'] == 'doc-1'
-    assert kwargs['data']['scs_job_id'] == 'job-1'
+    assert kwargs['data']['job_id'] == 'job-1'
     assert kwargs['headers']['Idempotency-Key'] == 'retry-key-1'
 
 
@@ -780,7 +781,8 @@ def test_scs_file_new_file_path_multipart(client: MathpixClient, tmp_path) -> No
     args, kwargs = mock_post.call_args
     assert args[0].endswith('/files/v1')
     assert not args[0].endswith('/files/v1/uri')
-    assert kwargs['data']['scs_job_id'] == 'job-1'
+    # The wrapper translates scs_job_id to the job_id form field
+    assert kwargs['data']['job_id'] == 'job-1'
 
 
 def test_list_scs_files_deprecated(client: MathpixClient) -> None:

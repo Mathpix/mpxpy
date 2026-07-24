@@ -889,8 +889,8 @@ class MathpixClient:
                 raise ValidationError("custom_id requires an explicit job_id")
         has_idempotency_key: bool = idempotency_key is not None
         if file_path is not None:
-            # The multipart body uses the legacy field name for job_id, so the
-            # reserved-keys guard must cover the alias too.
+            # The endpoint also recognizes job_id under a deprecated alias, so
+            # the reserved-keys guard must cover it too.
             _reject_reserved_extra_options(extra_options, {'scs_job_id'})
             return self._file_new_multipart(
                 file_path=file_path,
@@ -1027,18 +1027,17 @@ class MathpixClient:
     ) -> File:
         """Upload a local file via multipart POST /files/v1 for file_new.
 
-        The multipart endpoint uses the legacy field names, so job_id and
-        destination_uri are translated to scs_job_id and destination_s3_uri.
+        The endpoint takes job_id, custom_id, and filename as form fields
+        alongside the file part; the remaining options travel in the
+        options_json form field.
         """
         options: Dict[str, object] = {}
         if metadata:
             options["metadata"] = metadata
         if conversion_formats:
             options["conversion_formats"] = conversion_formats
-        if job_id:
-            options["scs_job_id"] = job_id
         if destination_uri:
-            options["destination_s3_uri"] = destination_uri
+            options["destination_uri"] = destination_uri
         if destination_basename:
             options["destination_basename"] = destination_basename
         if s3_region:
@@ -1080,7 +1079,7 @@ class MathpixClient:
         if filename:
             data["filename"] = filename
         if job_id:
-            data["scs_job_id"] = job_id
+            data["job_id"] = job_id
         if custom_id:
             data["custom_id"] = custom_id
         headers: Dict[str, str] = dict(self.auth.headers)
