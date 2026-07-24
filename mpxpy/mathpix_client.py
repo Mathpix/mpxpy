@@ -119,6 +119,33 @@ def _reject_reserved_extra_options(
         )
 
 
+_IMAGE_REQUEST_OPTION_KEYS: Set[str] = {
+    'src', 'metadata', 'tags', 'async', 'callback', 'formats', 'data_options',
+    'include_detected_alphabets', 'alphabets_allowed', 'region', 'enable_blue_hsv_filter',
+    'confidence_threshold', 'confidence_rate_threshold', 'include_equation_tags',
+    'include_line_data', 'include_word_data', 'include_smiles', 'include_inchi',
+    'include_geometry_data', 'include_diagram_text', 'auto_rotate_confidence_threshold',
+    'rm_spaces', 'rm_fonts', 'idiomatic_eqn_arrays', 'idiomatic_braces',
+    'numbers_default_to_math', 'math_fonts_default_to_math', 'math_inline_delimiters',
+    'math_display_delimiters', 'enable_spell_check', 'enable_tables_fallback',
+    'fullwidth_punctuation', 'disable_itemize', 'disable_lstlisting', 'include_page_info',
+    'enable_document_layout',
+}
+
+_PDF_REQUEST_OPTION_KEYS: Set[str] = {
+    'url', 'metadata', 'alphabets_allowed', 'rm_spaces', 'rm_fonts', 'idiomatic_eqn_arrays',
+    'include_equation_tags', 'include_smiles', 'include_chemistry_as_image',
+    'include_diagram_text', 'numbers_default_to_math', 'math_inline_delimiters',
+    'math_display_delimiters', 'page_ranges', 'enable_spell_check', 'auto_number_sections',
+    'remove_section_numbering', 'preserve_section_numbering', 'enable_tables_fallback',
+    'fullwidth_punctuation', 'conversion_formats', 'file_batch_id', 'webhook_url',
+    'mathpix_webhook_secret', 'webhook_payload', 'webhook_enabled_events', 'disable_itemize',
+    'disable_lstlisting', 'include_page_info', 'include_page_breaks', 'conversion_options',
+}
+
+_CONVERSION_REQUEST_OPTION_KEYS: Set[str] = {'mmd', 'formats', 'conversion_options'}
+
+
 class MathpixClient:
     """Client for interacting with the Mathpix API.
 
@@ -189,7 +216,12 @@ class MathpixClient:
             math_display_delimiters: Optional[Tuple[str, str]] = None,
             enable_spell_check: Optional[bool] = False,
             enable_tables_fallback: Optional[bool] = False,
-            fullwidth_punctuation: Optional[bool] = None
+            fullwidth_punctuation: Optional[bool] = None,
+            disable_itemize: Optional[bool] = None,
+            disable_lstlisting: Optional[bool] = None,
+            include_page_info: Optional[bool] = None,
+            enable_document_layout: Optional[bool] = None,
+            extra_options: Optional[Dict[str, Any]] = None
     ):
         r"""Process an image either from a local file or remote URL.
 
@@ -200,11 +232,11 @@ class MathpixClient:
             metadata: Optional dict to attach metadata to a request
             tags: Optional list of strings which can be used to identify results using the /v3/ocr-results endpoint
             is_async: Optional boolean to enable non-interactive requests
-            callback: Optional Callback Object (see https://docs.mathpix.com/#callback-object)
+            callback: Optional Callback Object (see https://docs.mathpix.com/reference/shared-types#callback-object)
             formats: Optional list of formats ('text', 'data', 'html', or 'latex_styled')
-            data_options: Optional DataOptions dict (see https://docs.mathpix.com/#dataoptions-object)
+            data_options: Optional DataOptions dict (see https://docs.mathpix.com/reference/post-v3-text#dataoptions-object)
             include_detected_alphabets: Optional boolean to return the detected alphabets
-            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/#alphabetsallowed-object)
+            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/reference/shared-types#alphabetsallowed-object)
             region: Optional dict to specify the image area with pixel coordinates 'top_left_x', 'top_left_y', 'width', 'height'
             enable_blue_hsv_filter: Optional boolean to enable a special mode of image processing where it processes blue hue text exclusively
             confidence_threshold: Optional number between 0 and 1 to specify a threshold for triggering confidence errors (file level threshold)
@@ -228,6 +260,11 @@ class MathpixClient:
             enable_spell_check: Optional boolean to enable a predictive mode for English handwriting
             enable_tables_fallback: Optional boolean to enable an advanced table processing algorithm that supports very large and complex tables
             fullwidth_punctuation: Optional boolean to specify whether punctuation will be fullwidth Unicode
+            disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
+            disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
+            include_page_info: Optional boolean to include page info in the output
+            enable_document_layout: Optional boolean to enable document layout analysis for "text" output
+            extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
         Returns:
             Image: A new Image instance.
@@ -238,6 +275,7 @@ class MathpixClient:
         if (file_path is None and url is None) or (file_path is not None and url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
+        _reject_reserved_extra_options(extra_options, _IMAGE_REQUEST_OPTION_KEYS)
         endpoint = urljoin(self.auth.api_url, 'v3/text')
         image_options: Dict[str, Any] = {
             "metadata": {
@@ -305,11 +343,21 @@ class MathpixClient:
             image_options["enable_tables_fallback"] = enable_tables_fallback
         if fullwidth_punctuation:
             image_options["fullwidth_punctuation"] = fullwidth_punctuation
+        if disable_itemize is not None:
+            image_options["disable_itemize"] = disable_itemize
+        if disable_lstlisting is not None:
+            image_options["disable_lstlisting"] = disable_lstlisting
+        if include_page_info is not None:
+            image_options["include_page_info"] = include_page_info
+        if enable_document_layout is not None:
+            image_options["enable_document_layout"] = enable_document_layout
         if not self.improve_mathpix:
             logger.debug('improve_mathpix set to False on the client')
             image_options["metadata"]["improve_mathpix"] = False
         elif not improve_mathpix:
             image_options["metadata"]["improve_mathpix"] = False
+        if extra_options:
+            image_options.update(extra_options)
         data = {
             "options_json": json.dumps(image_options)
         }
@@ -388,6 +436,12 @@ class MathpixClient:
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
+            disable_itemize: Optional[bool] = None,
+            disable_lstlisting: Optional[bool] = None,
+            include_page_info: Optional[bool] = None,
+            include_page_breaks: Optional[bool] = None,
+            conversion_options: Optional[Dict[str, Any]] = None,
+            extra_options: Optional[Dict[str, Any]] = None,
     ) -> Pdf:
         r"""Uploads a PDF, document, or ebook from a local file or remote URL and optionally requests conversions.
 
@@ -395,7 +449,7 @@ class MathpixClient:
             file_path: Path to a local PDF file.
             url: URL of a remote PDF file.
             metadata: Optional dict to attach metadata to a request
-            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/#alphabetsallowed-object)
+            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/reference/shared-types#alphabetsallowed-object)
             rm_spaces: Optional boolean to determine whether extra white space is removed from equations in "latex_styled" and "text" formats
             rm_fonts: Optional boolean to determine whether font commands such as \mathbf and \mathrm are removed from equations in "latex_styled" and "text" formats
             idiomatic_eqn_arrays: Optional boolean to specify whether to use aligned, gathered, or cases instead of an array environment for a list of equations
@@ -429,6 +483,12 @@ class MathpixClient:
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
             webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
             webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+            disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
+            disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
+            include_page_info: Optional boolean to include page info in the output
+            include_page_breaks: Optional boolean to include page break markers in the output
+            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/reference/shared-types#conversion-options)
+            extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
         Returns:
             Pdf: A new Pdf instance
@@ -456,6 +516,7 @@ class MathpixClient:
         if (file_path is None and url is None) or (file_path is not None and url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
+        _reject_reserved_extra_options(extra_options, _PDF_REQUEST_OPTION_KEYS)
         if not self.improve_mathpix:
             logger.debug('improve_mathpix set to False on the client')
             improve_mathpix = False
@@ -508,6 +569,16 @@ class MathpixClient:
             options["enable_tables_fallback"] = enable_tables_fallback
         if fullwidth_punctuation:
             options["fullwidth_punctuation"] = fullwidth_punctuation
+        if disable_itemize is not None:
+            options["disable_itemize"] = disable_itemize
+        if disable_lstlisting is not None:
+            options["disable_lstlisting"] = disable_lstlisting
+        if include_page_info is not None:
+            options["include_page_info"] = include_page_info
+        if include_page_breaks is not None:
+            options["include_page_breaks"] = include_page_breaks
+        if conversion_options is not None:
+            options["conversion_options"] = conversion_options
         if file_batch_id:
             options["file_batch_id"] = file_batch_id
         if webhook_url:
@@ -538,6 +609,8 @@ class MathpixClient:
             options["conversion_formats"]['mmd.zip'] = True
         if convert_to_html_zip:
             options["conversion_formats"]['html.zip'] = True
+        if extra_options:
+            options.update(extra_options)
         data = {
             "options_json": json.dumps(options)
         }
@@ -690,6 +763,8 @@ class MathpixClient:
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
             convert_to_html_zip: Optional[bool] = False,
+            conversion_options: Optional[Dict[str, Any]] = None,
+            extra_options: Optional[Dict[str, Any]] = None,
     ):
         """Converts Mathpix Markdown (MMD) to various output formats.
 
@@ -705,6 +780,8 @@ class MathpixClient:
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
+            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/reference/shared-types#conversion-options)
+            extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
         Returns:
             Conversion: A new Conversion instance.
@@ -713,6 +790,7 @@ class MathpixClient:
             MathpixClientError: If the API request fails.
         """
         logger.debug("Starting new MMD conversion")
+        _reject_reserved_extra_options(extra_options, _CONVERSION_REQUEST_OPTION_KEYS)
         endpoint = urljoin(self.auth.api_url, 'v3/converter')
         options = {
             "mmd": mmd,
@@ -738,6 +816,10 @@ class MathpixClient:
             options["formats"]['mmd.zip'] = True
         if convert_to_html_zip:
             options["formats"]['html.zip'] = True
+        if conversion_options is not None:
+            options["conversion_options"] = conversion_options
+        if extra_options:
+            options.update(extra_options)
         if len(options['formats'].items()) == 0:
             raise ValidationError("At least one format is required.")
         response_json = None
