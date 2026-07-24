@@ -61,7 +61,7 @@ class Auth:
         self.app_id = app_id or os.getenv('MATHPIX_APP_ID')
         self.app_key = app_key or os.getenv('MATHPIX_APP_KEY')
         raw_api_url = api_url or os.getenv('MATHPIX_URL', 'https://api.mathpix.com')
-        raw_files_api_url = files_api_url or os.getenv('MATHPIX_FILES_API_URL', 'https://api.mathpix.com')
+        raw_files_api_url = files_api_url or os.getenv('MATHPIX_FILES_API_URL') or raw_api_url
         if not self.app_id:
             logger.error("Client requires an App ID")
             raise AuthenticationError("Mathpix App ID is required")

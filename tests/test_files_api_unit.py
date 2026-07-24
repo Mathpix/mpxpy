@@ -58,6 +58,25 @@ def client() -> MathpixClient:
     return MathpixClient(app_id='test-app', app_key='test-key')
 
 
+# Auth URL resolution
+
+def test_files_api_url_follows_api_url(monkeypatch) -> None:
+    from mpxpy.auth import Auth
+    monkeypatch.setattr(Auth, 'load_config', lambda self: False)
+    monkeypatch.delenv('MATHPIX_URL', raising=False)
+    monkeypatch.delenv('MATHPIX_FILES_API_URL', raising=False)
+    # A custom api_url carries over to the Files API endpoints
+    assert Auth(app_id='x', app_key='y', api_url='https://example.test').files_api_url == 'https://example.test'
+    # Default with nothing set
+    assert Auth(app_id='x', app_key='y').files_api_url == 'https://api.mathpix.com'
+    # An explicit files_api_url wins
+    explicit = Auth(app_id='x', app_key='y', api_url='https://example.test', files_api_url='https://files.example.test')
+    assert explicit.files_api_url == 'https://files.example.test'
+    # The env var wins over the api_url fallback
+    monkeypatch.setenv('MATHPIX_FILES_API_URL', 'https://env-files.example.test')
+    assert Auth(app_id='x', app_key='y', api_url='https://example.test').files_api_url == 'https://env-files.example.test'
+
+
 # file_new
 
 def test_file_new_uri_request_shape(client: MathpixClient) -> None:
