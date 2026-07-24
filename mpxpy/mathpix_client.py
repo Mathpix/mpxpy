@@ -889,6 +889,9 @@ class MathpixClient:
                 raise ValidationError("custom_id requires an explicit job_id")
         has_idempotency_key: bool = idempotency_key is not None
         if file_path is not None:
+            # The multipart body uses the legacy field name for job_id, so the
+            # reserved-keys guard must cover the alias too.
+            _reject_reserved_extra_options(extra_options, {'scs_job_id'})
             return self._file_new_multipart(
                 file_path=file_path,
                 job_id=job_id,
@@ -1081,7 +1084,7 @@ class MathpixClient:
         if custom_id:
             data["custom_id"] = custom_id
         headers: Dict[str, str] = dict(self.auth.headers)
-        if idempotency_key:
+        if idempotency_key is not None:
             headers['Idempotency-Key'] = idempotency_key
         with path.open("rb") as f:
             files: Dict[str, Any] = {"file": f}

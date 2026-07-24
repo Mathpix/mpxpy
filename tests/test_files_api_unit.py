@@ -173,6 +173,15 @@ def test_file_new_local_upload_custom_id_requires_job_id(client: MathpixClient, 
         client.file_new(file_path=str(doc), custom_id='doc-1')
 
 
+def test_file_new_local_upload_rejects_legacy_reserved_alias(client: MathpixClient, tmp_path) -> None:
+    # The multipart body carries job_id under its legacy field name; the
+    # reserved-keys guard must cover the alias too.
+    doc = tmp_path / 'doc.pdf'
+    doc.write_bytes(b'%PDF-1.4 test')
+    with pytest.raises(ValidationError):
+        client.file_new(file_path=str(doc), job_id='job-1', extra_options={'scs_job_id': 'other-job'})
+
+
 def test_file_new_raises_files_api_error(client: MathpixClient) -> None:
     with patch('mpxpy.mathpix_client.post') as mock_post:
         mock_post.return_value = FakeResponse(
