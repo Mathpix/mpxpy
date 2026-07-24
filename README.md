@@ -396,7 +396,7 @@ Deletes an app token.
 
 #### Files API (async document processing)
 
-The Files API processes documents asynchronously from remote URIs — `s3://`, `gs://`, public `https://`, or Azure Blob HTTPS URLs — one at a time or up to 200,000 in a single batch call. Non-public sources require a registered [data source](https://docs.mathpix.com/reference/files-v1-data-sources) connecting your Mathpix account to the bucket; register it once via the API following the linked guide.
+The Files API processes documents asynchronously — local files, or remote URIs (`s3://`, `gs://`, public `https://`, or Azure Blob HTTPS URLs) one at a time or in bulk batch calls. Non-public sources require a registered [data source](https://docs.mathpix.com/reference/files-v1-data-sources) connecting your Mathpix account to the bucket; register it once via the API following the linked guide.
 
 Submit a single document and download the result:
 
@@ -441,8 +441,8 @@ Submit a single document for async processing, from a remote URI (`POST /files/v
 - `source_uri`: Remote location of the source document (`s3://`, `gs://`, public `https://`, or Azure Blob HTTPS URL). Exactly one of `source_uri` or `file_path` is required.
 - `file_path`: Path to a local file to upload.
 - `job_id`: Optional job to associate this file with. Required whenever `custom_id` is supplied.
-- `custom_id`: Optional customer-supplied identifier (max 256 chars, `[A-Za-z0-9_-.:]`). `(job_id, custom_id)` is the idempotency key: re-submitting the same pair returns the original file. Remote submissions only.
-- `idempotency_key`: Optional client-generated key sent as the `Idempotency-Key` header; makes a standalone submission safe to retry. Remote submissions only.
+- `custom_id`: Optional case-sensitive customer-supplied identifier. `(job_id, custom_id)` is the idempotency key: re-submitting the same pair returns the original file.
+- `idempotency_key`: Optional client-generated key sent as the `Idempotency-Key` header; makes a standalone submission safe to retry.
 - `filename`: Optional display name for the file.
 - `conversion_formats`: Dict of format names to enable (e.g., `{'docx': True, 'md': True}`). Mathpix Markdown (`mmd`) is always produced.
 - `extra_options`: Additional request options dict merged into the request body — an escape hatch for API options this SDK version does not model yet (validated server-side). May not override the validated request fields.
@@ -456,7 +456,7 @@ Submit a single document for async processing, from a remote URI (`POST /files/v
 
 ##### `MathpixClient.file_job_new`
 
-Submit a batch of documents in one call (the server enforces an items-per-call ceiling, currently 200,000). Returns a `FileJob` instance.
+Submit a batch of documents in one call (the server enforces an items-per-call ceiling). Returns a `FileJob` instance.
 
 ###### `MathpixClient.file_job_new` Arguments
 
@@ -466,6 +466,7 @@ Submit a batch of documents in one call (the server enforces an items-per-call c
 - `conversion_formats`: Job-wide conversion formats, applied to every file.
 - `image_output_mode`: Job-wide; `'local'` writes cropped images to each file's `destination_uri`.
 - `metadata`: Optional dict to attach metadata to the request.
+- `extra_options`: Additional request options dict merged into the request body — an escape hatch for API options this SDK version does not model yet (validated server-side). May not override the validated request fields.
 - Plus the same OCR options as `pdf_new`, applied to every file in the request.
 
 ##### `MathpixClient.file_job_list`
@@ -476,7 +477,7 @@ List submitted jobs, newest first. Returns a dict with `jobs` and `next_page_tok
 
 - `start`: Earliest submission date to include, `yyyy-MM-dd` (UTC).
 - `end`: Latest submission date to include, `yyyy-MM-dd` (UTC).
-- `limit`: Maximum jobs per page, 1-1000 (default 100).
+- `limit`: Maximum jobs per page (default 100).
 - `paging_state`: Pagination cursor from the previous response's `next_page_token`.
 
 ##### `MathpixClient.file_get` / `MathpixClient.file_delete` / `MathpixClient.file_job_get`
@@ -536,22 +537,21 @@ Register a bucket as a data source. Returns a `DataSource` instance.
 
 ###### `MathpixClient.data_source_new` Arguments
 
-- `provider`: One of `'aws'`, `'azure'`, `'gcp'`.
+- `provider`: Storage provider, e.g. `'aws'`, `'azure'`, `'gcp'` — see the [per-provider guides](https://docs.mathpix.com/reference/files-v1-data-sources) for the supported set.
 - `bucket`: Bucket / container name.
-- `auth_method`: `'iam_role'` or `'access_key'` (aws), `'azure_ad'` (azure), `'service_account'` (gcp).
-- `provider_specific_details`: Non-secret provider metadata (e.g. `iam_role_arn` + `aws_external_id` for aws/iam_role).
+- `auth_method`: Grant type for the provider, e.g. `'iam_role'` or `'access_key'` (aws), `'azure_ad'` (azure), `'service_account'` (gcp). Invalid combinations are rejected server-side.
+- `provider_specific_details`: Provider-shaped metadata (e.g. `iam_role_arn` + `aws_external_id` for aws/`iam_role`, `aws_access_key_id` for aws/`access_key`).
 - `name`: Optional human-readable label.
 - `region`: Bucket region (required for aws `access_key` only).
-- `secret`: Only for aws `access_key` (legacy); rejected for keyless providers.
+- `secret`: Only for aws `access_key` (legacy); keyless grant types reject it server-side.
 
 A registration that conflicts with an existing data source raises `FilesApiError` (`'conflict'`); the server message identifies the conflict.
 
 For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to-end. GCS registration verifies bucket control up front, so a successful return already confirms the grant.
 
-##### `MathpixClient.data_sources_list` / `data_source_get` / `data_source_test` / `data_source_delete`
+##### `MathpixClient.data_source_list` / `data_source_test` / `data_source_delete`
 
-- `data_sources_list()`: List the group's registered data sources (secrets are never returned).
-- `data_source_get(data_source_id)`: Returns a `DataSource` handle.
+- `data_source_list()`: List the group's registered data sources (secrets are never returned).
 - `data_source_test(data_source_id)`: Runs the read/write probe; returns `{'result', 'checks', 'message'}` and does **not** raise on a failed probe — use it to diagnose grant issues after customer-side IAM changes.
 - `data_source_delete(data_source_id)`: Removes the registration; already-started work is not interrupted, and the bucket can be registered again later. Deleting the registration does not revoke access on the cloud side — remove the grant separately to revoke access.
 

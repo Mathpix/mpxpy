@@ -17,9 +17,9 @@ class FileSubmission:
     Attributes:
         source_uri: Remote location of the source document. Accepted schemes:
             s3://, gs://, public https://, or an Azure Blob HTTPS URL.
-        custom_id: Optional customer-supplied identifier (max 256 chars,
-            characters [A-Za-z0-9_-.:], case-sensitive). Requires the job to
-            have an explicit job_id; (job_id, custom_id) is the idempotency key.
+        custom_id: Optional case-sensitive customer-supplied identifier.
+            Requires the job to have an explicit job_id; (job_id, custom_id)
+            is the idempotency key.
         filename: Optional display name for the file.
         destination_uri: Optional per-file destination for results. Requires a
             registered data source for the bucket.

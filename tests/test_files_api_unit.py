@@ -147,13 +147,30 @@ def test_file_new_local_upload_multipart(client: MathpixClient, tmp_path) -> Non
     assert kwargs['data']['filename'] == 'doc.pdf'
 
 
-def test_file_new_local_upload_rejects_uri_only_options(client: MathpixClient, tmp_path) -> None:
+def test_file_new_local_upload_forwards_custom_id_and_idempotency_key(client: MathpixClient, tmp_path) -> None:
+    # The multipart endpoint accepts custom_id as a form field and
+    # Idempotency-Key as a header, same as the URI transport.
+    doc = tmp_path / 'doc.pdf'
+    doc.write_bytes(b'%PDF-1.4 test')
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'file_id': 'f-local'})
+        client.file_new(
+            file_path=str(doc),
+            job_id='job-1',
+            custom_id='doc-1',
+            idempotency_key='retry-key-1',
+        )
+    _, kwargs = mock_post.call_args
+    assert kwargs['data']['custom_id'] == 'doc-1'
+    assert kwargs['data']['scs_job_id'] == 'job-1'
+    assert kwargs['headers']['Idempotency-Key'] == 'retry-key-1'
+
+
+def test_file_new_local_upload_custom_id_requires_job_id(client: MathpixClient, tmp_path) -> None:
     doc = tmp_path / 'doc.pdf'
     doc.write_bytes(b'%PDF-1.4 test')
     with pytest.raises(ValidationError):
-        client.file_new(file_path=str(doc), job_id='job-1', custom_id='doc-1')
-    with pytest.raises(ValidationError):
-        client.file_new(file_path=str(doc), idempotency_key='retry-key-1')
+        client.file_new(file_path=str(doc), custom_id='doc-1')
 
 
 def test_file_new_raises_files_api_error(client: MathpixClient) -> None:
@@ -541,24 +558,22 @@ def test_data_source_new_request_shape(client: MathpixClient) -> None:
     assert 'secret' not in body
 
 
-def test_data_source_new_validation(client: MathpixClient) -> None:
+def test_data_source_new_requires_shape_fields(client: MathpixClient) -> None:
+    # Only required-value checks are client-side; provider/auth_method
+    # combinations are the server's contract.
     details = {'iam_role_arn': 'arn', 'aws_external_id': 'x'}
-    # unknown provider
     with pytest.raises(ValidationError):
-        client.data_source_new(provider='digitalocean', bucket='b', auth_method='iam_role',
+        client.data_source_new(provider='', bucket='b', auth_method='iam_role',
                                provider_specific_details=details)
-    # auth_method not valid for the provider
-    with pytest.raises(ValidationError):
-        client.data_source_new(provider='azure', bucket='b', auth_method='iam_role',
-                               provider_specific_details=details)
-    # secret rejected for keyless auth methods
-    with pytest.raises(ValidationError):
-        client.data_source_new(provider='gcp', bucket='b', auth_method='service_account',
-                               provider_specific_details=details, secret='oops')
-    # empty bucket
     with pytest.raises(ValidationError):
         client.data_source_new(provider='aws', bucket='', auth_method='iam_role',
                                provider_specific_details=details)
+    with pytest.raises(ValidationError):
+        client.data_source_new(provider='aws', bucket='b', auth_method='',
+                               provider_specific_details=details)
+    with pytest.raises(ValidationError):
+        client.data_source_new(provider='aws', bucket='b', auth_method='iam_role',
+                               provider_specific_details={})
 
 
 def test_data_source_new_bucket_conflict_raises(client: MathpixClient) -> None:
@@ -625,7 +640,7 @@ def test_data_source_new_gcp_request_shape(client: MathpixClient) -> None:
 
 
 def test_data_source_new_aws_access_key_request_shape(client: MathpixClient) -> None:
-    details = {'access_key_id': 'AKIAEXAMPLE'}
+    details = {'aws_access_key_id': 'AKIAEXAMPLE'}
     with patch('mpxpy.mathpix_client.post') as mock_post:
         mock_post.return_value = FakeResponse(json_body={'data_source_id': 'ds-key'})
         client.data_source_new(provider='aws', bucket='my-bucket', auth_method='access_key',
@@ -633,7 +648,10 @@ def test_data_source_new_aws_access_key_request_shape(client: MathpixClient) -> 
                                region='us-east-1')
     _, kwargs = mock_post.call_args
     body = kwargs['json']
+    assert body['provider'] == 'aws'
+    assert body['bucket'] == 'my-bucket'
     assert body['auth_method'] == 'access_key'
+    assert body['provider_specific_details'] == {'aws_access_key_id': 'AKIAEXAMPLE'}
     assert body['secret'] == 'key-material'
     assert body['region'] == 'us-east-1'
 
@@ -666,11 +684,11 @@ def test_data_source_delete_not_found(client: MathpixClient) -> None:
     assert exc_info.value.error_id == 'not_found'
 
 
-def test_data_sources_list(client: MathpixClient) -> None:
+def test_data_source_list(client: MathpixClient) -> None:
     listing = {'data_sources': [{'data_source_id': 'ds-1', 'provider': 'aws', 'bucket': 'b'}]}
     with patch('mpxpy.mathpix_client.get') as mock_get:
         mock_get.return_value = FakeResponse(json_body=listing)
-        result = client.data_sources_list()
+        result = client.data_source_list()
     assert result == listing
     args, _ = mock_get.call_args
     assert args[0].endswith('/files/v1/data-sources')

@@ -1,18 +1,10 @@
-from typing import Optional, Dict, Any, Tuple
+from typing import Optional, Dict, Any
 from urllib.parse import urljoin, quote
 import requests
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
 from mpxpy.request_handler import post, delete
 from mpxpy.errors import ValidationError, error_from_response
-
-PROVIDERS: Tuple[str, ...] = ('aws', 'azure', 'gcp')
-
-AUTH_METHODS_BY_PROVIDER: Dict[str, Tuple[str, ...]] = {
-    'aws': ('iam_role', 'access_key'),
-    'azure': ('azure_ad',),
-    'gcp': ('service_account',),
-}
 
 
 class DataSource:

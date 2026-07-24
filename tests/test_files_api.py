@@ -200,7 +200,7 @@ def test_data_source_lifecycle(client: MathpixClient) -> None:
         assert probe['result'] in ('ok', 'failed')
         assert 'checks' in probe
         # The source appears in the listing.
-        listing = client.data_sources_list()
+        listing = client.data_source_list()
         listed_ids = [entry['data_source_id'] for entry in listing['data_sources']]
         assert data_source.data_source_id in listed_ids
     finally:

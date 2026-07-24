@@ -14,7 +14,7 @@ from mpxpy.file import File
 from mpxpy.scs_file import ScsFile
 from mpxpy.file_batch import FileBatch
 from mpxpy.file_job import FileJob, FileSubmission, normalize_file_submission
-from mpxpy.data_source import DataSource, PROVIDERS, AUTH_METHODS_BY_PROVIDER
+from mpxpy.data_source import DataSource
 from mpxpy.conversion import Conversion
 from mpxpy.batch import Batch
 from mpxpy.auth import Auth
@@ -819,19 +819,17 @@ class MathpixClient:
             file_path: Path to a local file to upload.
             job_id: Optional job to associate this file with. Required whenever
                 custom_id is supplied.
-            custom_id: Optional customer-supplied identifier (max 256 chars,
-                characters [A-Za-z0-9_-.:], case-sensitive). Requires job_id;
-                (job_id, custom_id) is the idempotency key: re-submitting the same
-                pair returns the original file rather than creating a new one, as
-                long as the original file is still live (pending, split, or
-                completed). Not supported for local file_path uploads.
+            custom_id: Optional case-sensitive customer-supplied identifier.
+                Requires job_id; (job_id, custom_id) is the idempotency key:
+                re-submitting the same pair returns the original file rather
+                than creating a new one, as long as the original file is still
+                live (pending, split, or completed).
             idempotency_key: Optional client-generated key sent as the
                 Idempotency-Key header (same constraints as custom_id). Makes a
                 standalone submission safe to retry: re-sending the same request
                 returns the original file_id instead of creating a duplicate. If
                 both a (job_id, custom_id) pair and an idempotency_key are present,
-                the pair takes precedence. Not supported for local file_path
-                uploads.
+                the pair takes precedence.
             filename: Optional display name for the file (defaults to
                 '<file_id>.pdf').
             conversion_formats: Dict of format names to enable (e.g., {'docx': True,
@@ -874,8 +872,7 @@ class MathpixClient:
 
         Raises:
             ValidationError: If not exactly one of source_uri and file_path is
-                provided, custom_id is supplied without job_id, custom_id or
-                idempotency_key is supplied for a local upload, or
+                provided, custom_id is supplied without job_id, or
                 extra_options contains a reserved request field.
             FileNotFoundError: If the specified file_path does not exist.
             FilesApiError: If the API rejects the submission.
@@ -892,12 +889,11 @@ class MathpixClient:
                 raise ValidationError("custom_id requires an explicit job_id")
         has_idempotency_key: bool = idempotency_key is not None
         if file_path is not None:
-            is_uri_only_option_set: bool = has_custom_id or has_idempotency_key
-            if is_uri_only_option_set:
-                raise ValidationError("custom_id and idempotency_key are not supported for local file_path uploads")
             return self._file_new_multipart(
                 file_path=file_path,
                 job_id=job_id,
+                custom_id=custom_id,
+                idempotency_key=idempotency_key,
                 filename=filename,
                 conversion_formats=conversion_formats,
                 extra_options=extra_options,
@@ -996,6 +992,8 @@ class MathpixClient:
             self,
             file_path: str,
             job_id: Optional[str] = None,
+            custom_id: Optional[str] = None,
+            idempotency_key: Optional[str] = None,
             filename: Optional[str] = None,
             conversion_formats: Optional[Dict[str, bool]] = None,
             extra_options: Optional[Dict[str, object]] = None,
@@ -1080,10 +1078,15 @@ class MathpixClient:
             data["filename"] = filename
         if job_id:
             data["scs_job_id"] = job_id
+        if custom_id:
+            data["custom_id"] = custom_id
+        headers: Dict[str, str] = dict(self.auth.headers)
+        if idempotency_key:
+            headers['Idempotency-Key'] = idempotency_key
         with path.open("rb") as f:
             files: Dict[str, Any] = {"file": f}
             try:
-                response: requests.Response = post(endpoint, data=data, files=files, headers=self.auth.headers, **self.request_options)
+                response: requests.Response = post(endpoint, data=data, files=files, headers=headers, **self.request_options)
                 has_failed: bool = not response.ok
                 if has_failed:
                     raise error_from_response(response)
@@ -1124,7 +1127,7 @@ class MathpixClient:
         """Submit a batch of documents for async processing in one call.
 
         Submits documents in bulk via POST /files/v1/jobs; the server enforces
-        an items-per-call ceiling (currently 200,000). The request is
+        an items-per-call ceiling. The request is
         accept-and-defer: it returns immediately with a job_id and file_count,
         then submits the items in the background. Per-item failures (bad or
         unsupported source_uri, missing data source) are NOT reported
@@ -1278,7 +1281,7 @@ class MathpixClient:
             start: Earliest submission date to include, yyyy-MM-dd (UTC).
                 Providing only one of start/end queries that single day.
             end: Latest submission date to include, yyyy-MM-dd (UTC).
-            limit: Maximum jobs per page, 1-1000 (default 100).
+            limit: Maximum jobs per page (default 100).
             paging_state: Opaque pagination cursor from the previous response's
                 'next_page_token'.
 
@@ -1288,7 +1291,7 @@ class MathpixClient:
 
         Raises:
             FilesApiError: If the request fails (e.g. 'bad_request' for a
-                malformed date or a limit outside 1-1000).
+                malformed date or an out-of-range limit).
         """
         logger.debug("Listing jobs from the Files API")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/jobs')
@@ -1424,52 +1427,53 @@ class MathpixClient:
         verification passes, so a successful return already confirms the grant.
 
         Args:
-            provider: One of 'aws', 'azure', 'gcp'.
+            provider: Storage provider, e.g. 'aws', 'azure', or 'gcp'; see the
+                per-provider guides for the supported set.
             bucket: Bucket / container name (S3 bucket, Azure container, or GCS
                 bucket).
-            auth_method: Grant type: 'iam_role' or 'access_key' for aws,
-                'azure_ad' for azure, 'service_account' for gcp.
-            provider_specific_details: Non-secret provider-shaped metadata, e.g.
+            auth_method: Grant type for the provider, e.g. 'iam_role' or
+                'access_key' for aws, 'azure_ad' for azure, 'service_account'
+                for gcp. Invalid provider/auth_method combinations are rejected
+                by the server ('bad_request').
+            provider_specific_details: Provider-shaped metadata, e.g.
                 {'iam_role_arn': ..., 'aws_external_id': ...} for aws/iam_role,
+                {'aws_access_key_id': ...} for aws/access_key,
                 {'azure_tenant_id': ..., 'storage_account': ...} for azure, or
                 {'gcp_project_id': ..., 'target_sa_email': ...} for gcp.
-            name: Optional human-readable label (max 128 chars).
+            name: Optional human-readable label.
             region: Bucket region; required for aws with 'access_key', optional
                 for 'iam_role' (discovered via the bucket).
-            secret: Only for aws with 'access_key' (legacy fallback); rejected
-                for the keyless providers.
+            secret: Only for aws with 'access_key' (legacy fallback); the
+                keyless grant types reject it server-side.
 
         Returns:
             DataSource: A new DataSource instance for the registered data source.
 
         Raises:
-            ValidationError: If provider or auth_method is invalid, the
-                auth_method does not belong to the provider, or a secret is
-                supplied for a keyless provider.
+            ValidationError: If provider, bucket, auth_method, or
+                provider_specific_details is missing.
             FilesApiError: If the API rejects the registration ('bad_request',
-                including GCS bucket-control verification failures), the
-                registration conflicts with an existing data source
-                ('conflict'; the server message identifies the conflict), or
-                the GCS verification probe could not reach the bucket
-                ('unavailable', 503; retryable).
+                including invalid provider/auth_method combinations, a secret
+                for a keyless grant type, and GCS bucket-control verification
+                failures), the registration conflicts with an existing data
+                source ('conflict'; the server message identifies the
+                conflict), or the GCS verification probe could not reach the
+                bucket ('unavailable', 503; retryable).
             MathpixClientError: If the request cannot be made.
         """
-        is_valid_provider: bool = provider in PROVIDERS
-        if not is_valid_provider:
-            raise ValidationError(f"provider must be one of: {', '.join(PROVIDERS)}")
-        is_valid_auth_method: bool = auth_method in AUTH_METHODS_BY_PROVIDER[provider]
-        if not is_valid_auth_method:
-            raise ValidationError(
-                f"auth_method for provider '{provider}' must be one of: "
-                f"{', '.join(AUTH_METHODS_BY_PROVIDER[provider])}"
-            )
+        has_provider: bool = bool(provider)
+        if not has_provider:
+            raise ValidationError("provider is required")
         has_bucket: bool = bool(bucket)
         if not has_bucket:
             raise ValidationError("bucket is required")
+        has_auth_method: bool = bool(auth_method)
+        if not has_auth_method:
+            raise ValidationError("auth_method is required")
+        has_details: bool = bool(provider_specific_details)
+        if not has_details:
+            raise ValidationError("provider_specific_details is required")
         has_secret: bool = secret is not None
-        is_keyless_auth_method: bool = auth_method != 'access_key'
-        if has_secret and is_keyless_auth_method:
-            raise ValidationError("secret is only accepted for aws with auth_method 'access_key'")
         logger.debug(f"Registering data source: provider={provider}, auth_method={auth_method}")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/data-sources')
         body: Dict[str, Any] = {
@@ -1496,7 +1500,7 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix data source registration failed: {e}")
 
-    def data_sources_list(self) -> Dict[str, Any]:
+    def data_source_list(self) -> Dict[str, Any]:
         """List the data sources registered for your group.
 
         Secrets (for aws 'access_key' sources) are never returned.
@@ -1520,20 +1524,6 @@ class MathpixClient:
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix data sources list request failed: {e}")
 
-    def data_source_get(self, data_source_id: str) -> DataSource:
-        """Get a DataSource instance for an existing data_source_id.
-
-        Constructs the handle without making a request; call DataSource.test()
-        to verify it.
-
-        Args:
-            data_source_id: The data source's identifier.
-
-        Returns:
-            DataSource: A DataSource instance for the given id.
-        """
-        return DataSource(auth=self.auth, data_source_id=data_source_id, request_options=self.request_options)
-
     def data_source_test(self, data_source_id: str) -> Dict[str, Any]:
         """Verify Mathpix can reach a registered bucket.
 
@@ -1550,7 +1540,7 @@ class MathpixClient:
         Raises:
             FilesApiError: If the request itself fails (e.g. 'not_found').
         """
-        return self.data_source_get(data_source_id).test()
+        return DataSource(auth=self.auth, data_source_id=data_source_id, request_options=self.request_options).test()
 
     def data_source_delete(self, data_source_id: str) -> Dict[str, Any]:
         """Remove a data source registration.
@@ -1567,7 +1557,7 @@ class MathpixClient:
         Raises:
             FilesApiError: If no accessible data source has this id ('not_found').
         """
-        return self.data_source_get(data_source_id).delete()
+        return DataSource(auth=self.auth, data_source_id=data_source_id, request_options=self.request_options).delete()
 
     @deprecated("scs_file_new is deprecated; use file_new(source_uri=...) instead")
     def scs_file_new(
