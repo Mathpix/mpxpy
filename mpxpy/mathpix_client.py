@@ -814,6 +814,8 @@ class MathpixClient:
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
             convert_to_html_zip: Optional[bool] = False,
+            conversion_options: Optional[Dict[str, Any]] = None,
+            extra_options: Optional[Dict[str, Any]] = None,
     ):
         """Converts Mathpix Markdown (MMD) to various output formats.
 
@@ -829,6 +831,8 @@ class MathpixClient:
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
+            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/#conversionoptions-object)
+            extra_options: Optional dict of raw request options merged into the request body, taking precedence over the other arguments. Escape hatch for API options this SDK version does not model yet; values are validated server-side
 
         Returns:
             Conversion: A new Conversion instance.
@@ -862,6 +866,10 @@ class MathpixClient:
             options["formats"]['mmd.zip'] = True
         if convert_to_html_zip:
             options["formats"]['html.zip'] = True
+        if conversion_options is not None:
+            options["conversion_options"] = conversion_options
+        if extra_options:
+            options.update(extra_options)
         if len(options['formats'].items()) == 0:
             raise ValidationError("At least one format is required.")
         response_json = None
