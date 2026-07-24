@@ -189,7 +189,26 @@ class MathpixClient:
             math_display_delimiters: Optional[Tuple[str, str]] = None,
             enable_spell_check: Optional[bool] = False,
             enable_tables_fallback: Optional[bool] = False,
-            fullwidth_punctuation: Optional[bool] = None
+            fullwidth_punctuation: Optional[bool] = None,
+            disable_itemize: Optional[bool] = None,
+            disable_lstlisting: Optional[bool] = None,
+            include_chemistry: Optional[bool] = None,
+            include_page_info: Optional[bool] = None,
+            language_hint: Optional[str] = None,
+            include_text_caption: Optional[bool] = None,
+            table_ocr_algorithm: Optional[str] = None,
+            include_chart_data: Optional[bool] = None,
+            include_detection_map: Optional[bool] = None,
+            include_font_size: Optional[bool] = None,
+            force_lines: Optional[bool] = None,
+            include_stats: Optional[bool] = None,
+            include_times: Optional[bool] = None,
+            ocr: Optional[List[str]] = None,
+            skip_recrop: Optional[bool] = None,
+            format_options: Optional[Dict[str, Any]] = None,
+            beam_size: Optional[int] = None,
+            n_best: Optional[int] = None,
+            enable_document_layout: Optional[bool] = None
     ):
         r"""Process an image either from a local file or remote URL.
 
@@ -228,6 +247,25 @@ class MathpixClient:
             enable_spell_check: Optional boolean to enable a predictive mode for English handwriting
             enable_tables_fallback: Optional boolean to enable an advanced table processing algorithm that supports very large and complex tables
             fullwidth_punctuation: Optional boolean to specify whether punctuation will be fullwidth Unicode
+            disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
+            disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
+            include_chemistry: Optional boolean to enable chemistry diagram OCR
+            include_page_info: Optional boolean to include page info in the output
+            language_hint: Optional string to hint the primary language of the document
+            include_text_caption: Optional boolean to include captions for figures and tables
+            table_ocr_algorithm: Optional string to select the table OCR algorithm
+            include_chart_data: Optional boolean to return extracted data for charts
+            include_detection_map: Optional boolean to return the detection map of content types
+            include_font_size: Optional boolean to return detected font sizes
+            force_lines: Optional boolean to force line segmentation
+            include_stats: Optional boolean to include processing stats in the result
+            include_times: Optional boolean to include per-stage timing in the result
+            ocr: Optional list specifying recognition types, any of 'math' and 'text'
+            skip_recrop: Optional boolean to skip the automatic recrop step
+            format_options: Optional dict of per-format options (see https://docs.mathpix.com/#formatoptions-object)
+            beam_size: Optional int between 1 and 10 for the beam search width
+            n_best: Optional int (<= beam_size) for the number of candidate results to return
+            enable_document_layout: Optional boolean to enable document layout analysis for "text" output
 
         Returns:
             Image: A new Image instance.
@@ -305,6 +343,44 @@ class MathpixClient:
             image_options["enable_tables_fallback"] = enable_tables_fallback
         if fullwidth_punctuation:
             image_options["fullwidth_punctuation"] = fullwidth_punctuation
+        if disable_itemize is not None:
+            image_options["disable_itemize"] = disable_itemize
+        if disable_lstlisting is not None:
+            image_options["disable_lstlisting"] = disable_lstlisting
+        if include_chemistry is not None:
+            image_options["include_chemistry"] = include_chemistry
+        if include_page_info is not None:
+            image_options["include_page_info"] = include_page_info
+        if language_hint is not None:
+            image_options["language_hint"] = language_hint
+        if include_text_caption is not None:
+            image_options["include_text_caption"] = include_text_caption
+        if table_ocr_algorithm is not None:
+            image_options["table_ocr_algorithm"] = table_ocr_algorithm
+        if include_chart_data is not None:
+            image_options["include_chart_data"] = include_chart_data
+        if include_detection_map is not None:
+            image_options["include_detection_map"] = include_detection_map
+        if include_font_size is not None:
+            image_options["include_font_size"] = include_font_size
+        if force_lines is not None:
+            image_options["force_lines"] = force_lines
+        if include_stats is not None:
+            image_options["include_stats"] = include_stats
+        if include_times is not None:
+            image_options["include_times"] = include_times
+        if ocr is not None:
+            image_options["ocr"] = ocr
+        if skip_recrop is not None:
+            image_options["skip_recrop"] = skip_recrop
+        if format_options is not None:
+            image_options["format_options"] = format_options
+        if beam_size is not None:
+            image_options["beam_size"] = beam_size
+        if n_best is not None:
+            image_options["n_best"] = n_best
+        if enable_document_layout is not None:
+            image_options["enable_document_layout"] = enable_document_layout
         if not self.improve_mathpix:
             logger.debug('improve_mathpix set to False on the client')
             image_options["metadata"]["improve_mathpix"] = False
@@ -388,6 +464,16 @@ class MathpixClient:
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
+            tags: Optional[List[str]] = None,
+            disable_itemize: Optional[bool] = None,
+            disable_lstlisting: Optional[bool] = None,
+            include_chemistry: Optional[bool] = None,
+            include_page_info: Optional[bool] = None,
+            include_page_breaks: Optional[bool] = None,
+            language_hint: Optional[str] = None,
+            include_text_caption: Optional[bool] = None,
+            table_ocr_algorithm: Optional[str] = None,
+            conversion_options: Optional[Dict[str, Any]] = None,
     ) -> Pdf:
         r"""Uploads a PDF, document, or ebook from a local file or remote URL and optionally requests conversions.
 
@@ -429,6 +515,16 @@ class MathpixClient:
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
             webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
             webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+            tags: Optional list of strings which can be used to identify results using the /v3/ocr-results endpoint
+            disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
+            disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
+            include_chemistry: Optional boolean to enable chemistry diagram OCR
+            include_page_info: Optional boolean to include page info in the output
+            include_page_breaks: Optional boolean to include page break markers in the output
+            language_hint: Optional string to hint the primary language of the document
+            include_text_caption: Optional boolean to include captions for figures and tables
+            table_ocr_algorithm: Optional string to select the table OCR algorithm
+            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/#conversionoptions-object)
 
         Returns:
             Pdf: A new Pdf instance
@@ -508,6 +604,26 @@ class MathpixClient:
             options["enable_tables_fallback"] = enable_tables_fallback
         if fullwidth_punctuation:
             options["fullwidth_punctuation"] = fullwidth_punctuation
+        if tags is not None:
+            options["tags"] = tags
+        if disable_itemize is not None:
+            options["disable_itemize"] = disable_itemize
+        if disable_lstlisting is not None:
+            options["disable_lstlisting"] = disable_lstlisting
+        if include_chemistry is not None:
+            options["include_chemistry"] = include_chemistry
+        if include_page_info is not None:
+            options["include_page_info"] = include_page_info
+        if include_page_breaks is not None:
+            options["include_page_breaks"] = include_page_breaks
+        if language_hint is not None:
+            options["language_hint"] = language_hint
+        if include_text_caption is not None:
+            options["include_text_caption"] = include_text_caption
+        if table_ocr_algorithm is not None:
+            options["table_ocr_algorithm"] = table_ocr_algorithm
+        if conversion_options is not None:
+            options["conversion_options"] = conversion_options
         if file_batch_id:
             options["file_batch_id"] = file_batch_id
         if webhook_url:
