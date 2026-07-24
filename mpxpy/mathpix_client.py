@@ -208,7 +208,8 @@ class MathpixClient:
             format_options: Optional[Dict[str, Any]] = None,
             beam_size: Optional[int] = None,
             n_best: Optional[int] = None,
-            enable_document_layout: Optional[bool] = None
+            enable_document_layout: Optional[bool] = None,
+            extra_options: Optional[Dict[str, Any]] = None
     ):
         r"""Process an image either from a local file or remote URL.
 
@@ -266,6 +267,7 @@ class MathpixClient:
             beam_size: Optional int between 1 and 10 for the beam search width
             n_best: Optional int (<= beam_size) for the number of candidate results to return
             enable_document_layout: Optional boolean to enable document layout analysis for "text" output
+            extra_options: Optional dict of raw request options merged into the request body, taking precedence over the other arguments. Escape hatch for API options this SDK version does not model yet; values are validated server-side
 
         Returns:
             Image: A new Image instance.
@@ -386,6 +388,8 @@ class MathpixClient:
             image_options["metadata"]["improve_mathpix"] = False
         elif not improve_mathpix:
             image_options["metadata"]["improve_mathpix"] = False
+        if extra_options:
+            image_options.update(extra_options)
         data = {
             "options_json": json.dumps(image_options)
         }
@@ -474,6 +478,7 @@ class MathpixClient:
             include_text_caption: Optional[bool] = None,
             table_ocr_algorithm: Optional[str] = None,
             conversion_options: Optional[Dict[str, Any]] = None,
+            extra_options: Optional[Dict[str, Any]] = None,
     ) -> Pdf:
         r"""Uploads a PDF, document, or ebook from a local file or remote URL and optionally requests conversions.
 
@@ -525,6 +530,7 @@ class MathpixClient:
             include_text_caption: Optional boolean to include captions for figures and tables
             table_ocr_algorithm: Optional string to select the table OCR algorithm
             conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/#conversionoptions-object)
+            extra_options: Optional dict of raw request options merged into the request body, taking precedence over the other arguments. Escape hatch for API options this SDK version does not model yet; values are validated server-side
 
         Returns:
             Pdf: A new Pdf instance
@@ -654,6 +660,8 @@ class MathpixClient:
             options["conversion_formats"]['mmd.zip'] = True
         if convert_to_html_zip:
             options["conversion_formats"]['html.zip'] = True
+        if extra_options:
+            options.update(extra_options)
         data = {
             "options_json": json.dumps(options)
         }
