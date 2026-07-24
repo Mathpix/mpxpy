@@ -1,10 +1,18 @@
 import os
 import pathlib
 import urllib.parse
+from importlib.metadata import version, PackageNotFoundError
 from dotenv import load_dotenv
 from typing import Optional
 from mpxpy.logger import logger
 from mpxpy.errors import AuthenticationError, ValidationError
+
+try:
+    MPXPY_VERSION: str = version("mpxpy")
+except PackageNotFoundError:
+    MPXPY_VERSION = "unknown"
+
+USER_AGENT: str = f"mpxpy/{MPXPY_VERSION}"
 
 
 class Auth:
@@ -53,7 +61,7 @@ class Auth:
         self.app_id = app_id or os.getenv('MATHPIX_APP_ID')
         self.app_key = app_key or os.getenv('MATHPIX_APP_KEY')
         raw_api_url = api_url or os.getenv('MATHPIX_URL', 'https://api.mathpix.com')
-        raw_files_api_url = files_api_url or os.getenv('MATHPIX_FILES_API_URL', 'https://api.mathpix.com')
+        raw_files_api_url = files_api_url or os.getenv('MATHPIX_FILES_API_URL') or raw_api_url
         if not self.app_id:
             logger.error("Client requires an App ID")
             raise AuthenticationError("Mathpix App ID is required")
@@ -66,6 +74,7 @@ class Auth:
         self.headers = {
             'app_id': self.app_id,
             'app_key': self.app_key,
+            'User-Agent': USER_AGENT,
         }
 
     def load_config(self):

@@ -1,29 +1,28 @@
 import os
-import sys
 import time
 import json
 from typing import Optional, Dict, Any
 from urllib.parse import urljoin
-if sys.version_info >= (3, 13):
-    from warnings import deprecated
-else:
-    from typing_extensions import deprecated
+import requests
 from mpxpy.auth import Auth
 from mpxpy.logger import logger
-from mpxpy.request_handler import get
-from mpxpy.errors import FilesystemError, ValidationError, ConversionIncompleteError
+from mpxpy.request_handler import get, delete
+from mpxpy.errors import (
+    FilesystemError,
+    ValidationError,
+    ConversionIncompleteError,
+    MathpixClientError,
+    error_from_response,
+    parse_files_api_error_envelope,
+)
 
 
-@deprecated("ScsFile is deprecated; use mpxpy.file.File instead")
-class ScsFile:
-    """Manages a file through the legacy files-api v1 endpoints.
+class File:
+    """Manages a document submitted to the Files API (files/v1).
 
-    Deprecated: use mpxpy.file.File instead, which targets the public Files API
-    and raises FilesApiError with the API's error codes. ScsFile is kept with
-    its original behavior for compatibility during the deprecation window.
-
-    This class handles operations on Mathpix files, including checking status,
-    downloading results in different formats, and waiting for processing to complete.
+    This class handles operations on Files API files, including checking status,
+    downloading results in different formats, waiting for processing to complete,
+    and deleting the file from Mathpix storage.
 
     Attributes:
         auth: An Auth instance with Mathpix credentials.
@@ -34,52 +33,110 @@ class ScsFile:
             auth: Auth,
             file_id: Optional[str] = None,
             request_options: Optional[Dict[str, Any]] = None,
-    ):
+            status_result: Optional[Dict[str, Any]] = None,
+    ) -> None:
         """Initialize a File instance.
 
         Args:
             auth: Auth instance containing Mathpix API credentials.
             file_id: The unique identifier for the file.
             request_options: Optional dict of kwargs to pass to requests.
+            status_result: Optional file-status response body to seed the
+                lazy attributes with, avoiding an extra status request.
 
         Raises:
             ValidationError: If auth is not provided or file_id is empty.
         """
-        self.auth = auth
-        if not self.auth:
+        self.auth: Auth = auth
+        has_auth: bool = self.auth is not None
+        if not has_auth:
             logger.error("File requires an authenticated client")
             raise ValidationError("File requires an authenticated client")
-        self.file_id = file_id or ''
-        if not self.file_id:
+        self.file_id: str = file_id or ''
+        has_file_id: bool = bool(self.file_id)
+        if not has_file_id:
             logger.error("File requires a File ID")
             raise ValidationError("File requires a File ID")
-        self.request_options = request_options or {}
+        self.request_options: Dict[str, Any] = request_options or {}
+        self._last_status: Optional[Dict[str, Any]] = status_result
+
+    def _status_field(self, field: str) -> Any:
+        """Return a field from the most recent status response, fetching one if needed."""
+        has_cached_status: bool = self._last_status is not None
+        if not has_cached_status:
+            self.status()
+        return (self._last_status or {}).get(field)
+
+    @property
+    def custom_id(self) -> Optional[str]:
+        """The customer-supplied identifier echoed by the API, or None."""
+        return self._status_field('custom_id')
+
+    @property
+    def filename(self) -> Optional[str]:
+        """The display name supplied at submit, or the API default."""
+        return self._status_field('filename')
+
+    @property
+    def num_pages(self) -> Optional[int]:
+        """Total pages detected in the document (0 until the page split runs)."""
+        return self._status_field('num_pages')
+
+    @property
+    def percent_done(self) -> Optional[float]:
+        """Processing progress from 0.0 to 100.0."""
+        return self._status_field('percent_done')
+
+    @property
+    def destination_uri(self) -> Optional[str]:
+        """The result destination supplied at submit, or None."""
+        return self._status_field('destination_uri')
+
+    @property
+    def destination_basename(self) -> Optional[str]:
+        """The output basename supplied at submit, or None."""
+        return self._status_field('destination_basename')
+
+    @property
+    def error(self) -> Optional[str]:
+        """Machine-readable error code when status is 'error', else None."""
+        return self._status_field('error')
+
+    @property
+    def error_info(self) -> Optional[Dict[str, Any]]:
+        """The error id/message pair when status is 'error', else None."""
+        return self._status_field('error_info')
 
     def wait_until_complete(self, timeout: int = 60) -> bool:
         """Wait for the file processing to complete.
 
         Polls the file status until it's complete or the timeout is reached.
+        On failure the error details remain available via the `error` and
+        `error_info` attributes.
 
         Args:
             timeout: Maximum number of seconds to wait. Must be a positive, non-zero integer.
 
         Returns:
-            bool: True if processing completed successfully, False if it timed out.
+            bool: True if processing completed successfully, False if it errored or timed out.
 
         Raises:
             ValidationError: If timeout is an invalid value
         """
-        if not isinstance(timeout, int) or timeout <= 0:
+        is_valid_timeout: bool = isinstance(timeout, int) and timeout > 0
+        if not is_valid_timeout:
             raise ValidationError("Timeout must be a positive, non-zero integer")
         logger.debug(f"Waiting for file {self.file_id} to complete (timeout: {timeout}s)")
-        attempt = 1
+        attempt: int = 1
         while attempt < timeout:
             logger.debug(f'Checking file status... ({attempt}/{timeout})')
-            file_status = self.status()
-            if file_status.get('status') == 'completed':
+            file_status: Dict[str, Any] = self.status()
+            is_completed: bool = file_status.get('status') == 'completed'
+            has_errored: bool = file_status.get('status') == 'error'
+            if is_completed:
                 logger.debug(f"File {self.file_id} completed successfully")
                 return True
-            elif file_status.get('status') == 'error':
+            elif has_errored:
                 logger.error(f"File {self.file_id} processing failed")
                 return False
             time.sleep(1)
@@ -91,6 +148,10 @@ class ScsFile:
         """Wait for a specific format conversion to complete.
 
         Polls the file status until the format is complete or the timeout is reached.
+        Format conversions complete independently of the top-level file status and
+        can lag behind it; a requested format that has not started converting yet is
+        absent from the status response's `formats` map and is treated the same as
+        one that is not yet completed.
 
         Args:
             format: The format to wait for (e.g., 'md', 'docx', 'latex', 'tex.zip').
@@ -103,21 +164,25 @@ class ScsFile:
         Raises:
             ValidationError: If timeout is an invalid value
         """
-        if not isinstance(timeout, int) or timeout <= 0:
+        is_valid_timeout: bool = isinstance(timeout, int) and timeout > 0
+        if not is_valid_timeout:
             raise ValidationError("Timeout must be a positive, non-zero integer")
-        if format == 'tex':
+        is_tex_alias: bool = format == 'tex'
+        if is_tex_alias:
             logger.info("wait_for_format: 'tex' converted to 'latex' (API uses 'latex' for status)")
             format = 'latex'
         logger.debug(f"Waiting for file {self.file_id} format '{format}' to complete (timeout: {timeout}s)")
-        attempt = 1
+        attempt: int = 1
         while attempt < timeout:
             logger.debug(f'Checking format status... ({attempt}/{timeout})')
-            file_status = self.status()
-            format_status = file_status.get('formats', {}).get(format)
-            if format_status == 'completed':
+            file_status: Dict[str, Any] = self.status()
+            format_status: Optional[str] = file_status.get('formats', {}).get(format)
+            is_format_completed: bool = format_status == 'completed'
+            has_format_errored: bool = format_status == 'error'
+            if is_format_completed:
                 logger.debug(f"File {self.file_id} format '{format}' completed successfully")
                 return True
-            elif format_status == 'error':
+            elif has_format_errored:
                 logger.error(f"File {self.file_id} format '{format}' failed")
                 return False
             time.sleep(1)
@@ -135,12 +200,73 @@ class ScsFile:
                 - num_pages: Total number of pages
                 - num_pages_completed: Pages processed so far
                 - percent_done: Processing progress percentage
-                - formats: Dict of format statuses
+                - formats: Dict of per-format conversion statuses
+                - filename, custom_id, destination_uri, destination_basename, format_primary
+                - error, error_info: present when status is 'error'
+
+        Raises:
+            FilesApiError: If the file does not exist ('not_found') or belongs to
+                a different group ('forbidden').
+            MathpixClientError: If the request fails without a Files API error body.
         """
         logger.debug(f"Getting status for file {self.file_id}")
-        endpoint = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}')
-        response = get(endpoint, headers=self.auth.headers, **self.request_options)
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}')
+        response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+        has_failed: bool = not response.ok
+        if has_failed:
+            raise error_from_response(response)
+        result: Dict[str, Any] = response.json()
+        self._last_status = result
+        return result
+
+    def delete(self) -> Dict[str, Any]:
+        """Permanently remove the file and its results from Mathpix-owned storage.
+
+        Only files in a terminal state (completed or error) can be deleted; a file
+        still being processed returns a conflict. Deleting is idempotent: repeating
+        the call on an already-deleted file returns the same success body. Results
+        delivered to a customer-owned bucket via destination_uri are not affected.
+
+        Returns:
+            dict: Response containing 'file_id' and 'status': 'deleted'.
+
+        Raises:
+            FilesApiError: If the file does not exist ('not_found'), belongs to a
+                different group ('forbidden'), or is still processing ('conflict').
+        """
+        logger.debug(f"Deleting file {self.file_id}")
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}')
+        response: requests.Response = delete(endpoint, headers=self.auth.headers, **self.request_options)
+        has_failed: bool = not response.ok
+        if has_failed:
+            raise error_from_response(response)
         return response.json()
+
+    def _check_download_response(self, response: requests.Response) -> None:
+        """Raise the appropriate error for a failed result download.
+
+        Per the Files API, a format that is still converting returns 404 with an
+        error body of 'format_not_ready'; a plain 'not_found' 404 means the file id
+        does not exist; 415 'unsupported_format' means the extension was never
+        requested. A 409 is also treated as format-not-ready for compatibility with
+        older deployments. Any other failure raises FilesApiError when the body is
+        a Files API error envelope, and MathpixClientError otherwise.
+        """
+        is_success: bool = response.ok
+        if is_success:
+            return
+        envelope: Optional[Dict[str, Any]] = parse_files_api_error_envelope(response)
+        error_id: Optional[str] = envelope['error_id'] if envelope is not None else None
+        is_unsupported_format: bool = response.status_code == 415 or error_id == 'unsupported_format'
+        if is_unsupported_format:
+            raise ValidationError(f"Format was not requested or is not supported: {error_id or response.status_code}")
+        is_format_not_ready: bool = response.status_code == 409 or error_id == 'format_not_ready'
+        if is_format_not_ready:
+            raise ConversionIncompleteError("Format not ready yet")
+        is_missing_file: bool = error_id == 'not_found'
+        if is_missing_file:
+            raise MathpixClientError(f"File not found: {self.file_id}")
+        raise error_from_response(response)
 
     def save_file(self, path: str, conversion_format: str) -> str:
         """Helper function to save the processed file result to a local path.
@@ -155,18 +281,16 @@ class ScsFile:
         Raises:
             ConversionIncompleteError: If the conversion is not complete
         """
-        if path.endswith('/') or path.endswith('\\'):
-            filename = f"{self.file_id}.{conversion_format}"
+        is_directory_path: bool = path.endswith('/') or path.endswith('\\')
+        if is_directory_path:
+            filename: str = f"{self.file_id}.{conversion_format}"
             path = os.path.join(path, filename)
         logger.debug(f"Downloading output for file {self.file_id} in format {conversion_format} to path {path}")
-        endpoint = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers, **self.request_options)
-        if response.status_code == 404:
-            raise ConversionIncompleteError("File not found")
-        if response.status_code == 409:
-            raise ConversionIncompleteError("Format not ready yet")
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
+        response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+        self._check_download_response(response)
         try:
-            directory = os.path.dirname(path)
+            directory: str = os.path.dirname(path)
             if directory:
                 os.makedirs(directory, exist_ok=True)
             with open(path, 'wb') as f:
@@ -191,12 +315,9 @@ class ScsFile:
             ConversionIncompleteError: If the conversion is not complete
         """
         logger.debug(f"Downloading output for file {self.file_id} in format: {conversion_format}")
-        endpoint = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers, **self.request_options)
-        if response.status_code == 404:
-            raise ConversionIncompleteError("File not found")
-        if response.status_code == 409:
-            raise ConversionIncompleteError("Format not ready yet")
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
+        response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+        self._check_download_response(response)
         return response.text
 
     def bytes_result(self, conversion_format: str) -> bytes:
@@ -212,15 +333,12 @@ class ScsFile:
             ConversionIncompleteError: If the conversion is not complete
         """
         logger.debug(f"Downloading output for file {self.file_id} in format: {conversion_format}")
-        endpoint = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers, **self.request_options)
-        if response.status_code == 404:
-            raise ConversionIncompleteError("File not found")
-        if response.status_code == 409:
-            raise ConversionIncompleteError("Format not ready yet")
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
+        response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+        self._check_download_response(response)
         return response.content
 
-    def json_result(self, conversion_format: str):
+    def json_result(self, conversion_format: str) -> Any:
         """Helper method to download the processed file result as JSON.
 
         Args:
@@ -233,12 +351,9 @@ class ScsFile:
             ConversionIncompleteError: If the conversion is not complete
         """
         logger.debug(f"Downloading output for file {self.file_id} in format: {conversion_format}")
-        endpoint = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
-        response = get(endpoint, headers=self.auth.headers, **self.request_options)
-        if response.status_code == 404:
-            raise ConversionIncompleteError("File not found")
-        if response.status_code == 409:
-            raise ConversionIncompleteError("Format not ready yet")
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/{self.file_id}.{conversion_format}')
+        response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+        self._check_download_response(response)
         return json.loads(response.text)
 
     # Text format methods
@@ -304,11 +419,11 @@ class ScsFile:
         return self.bytes_result(conversion_format='png')
 
     # JSON format methods
-    def to_lines_json(self):
+    def to_lines_json(self) -> Any:
         """Get the processed file result as lines.json."""
         return self.json_result(conversion_format='lines.json')
 
-    def to_lines_mmd_json(self):
+    def to_lines_mmd_json(self) -> Any:
         """Get the processed file result as lines.mmd.json."""
         return self.json_result(conversion_format='lines.mmd.json')
 

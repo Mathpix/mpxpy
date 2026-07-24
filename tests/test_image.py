@@ -69,7 +69,7 @@ def test_invalid_image_arguments(client):
 def test_async_image(client):
     image_file_url = "https://mathpix-ocr-examples.s3.amazonaws.com/cases_hw.jpg"
     image = client.image_new(url=image_file_url, is_async=True)
-    assert image.wait_until_complete(timeout=20), f"Async image request did not complete within the timeout period"
+    assert image.wait_until_complete(timeout=20), "Async image request did not complete within the timeout period"
     result = image.results()
     assert result is not None, "Async image result is None"
     assert 'image_id' in result, "Async image result has no image_id"
