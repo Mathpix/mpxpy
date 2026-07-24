@@ -445,7 +445,7 @@ Submit a single document for async processing, from a remote URI (`POST /files/v
 - `idempotency_key`: Optional client-generated key sent as the `Idempotency-Key` header; makes a standalone submission safe to retry. Remote submissions only.
 - `filename`: Optional display name for the file.
 - `conversion_formats`: Dict of format names to enable (e.g., `{'docx': True, 'md': True}`). Mathpix Markdown (`mmd`) is always produced.
-- `conversion_options`: Additional request options dict.
+- `extra_options`: Additional request options dict merged into the request body — an escape hatch for API options this SDK version does not model yet (validated server-side). May not override the validated request fields.
 - `destination_uri`: Optional destination for results; must be backed by a registered data source. When omitted, results stay in Mathpix storage and are fetched via the download helpers.
 - `destination_basename`: Optional basename for output objects (defaults to the file_id).
 - `s3_region`: Optional region of the `destination_uri` S3 bucket.

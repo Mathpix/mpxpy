@@ -211,12 +211,12 @@ def test_file_new_metadata_and_optional_fields_forwarded(client: MathpixClient) 
     assert body['metadata'] == {'batch': 'july'}
 
 
-def test_file_new_rejects_reserved_conversion_options(client: MathpixClient) -> None:
+def test_file_new_rejects_reserved_extra_options(client: MathpixClient) -> None:
     for reserved_key in ('source_uri', 'job_id', 'custom_id', 'metadata'):
         with pytest.raises(ValidationError):
             client.file_new(
                 source_uri='s3://bucket/doc.pdf',
-                conversion_options={reserved_key: 'injected'},
+                extra_options={reserved_key: 'injected'},
             )
 
 
@@ -264,12 +264,12 @@ def test_file_job_new_validation(client: MathpixClient) -> None:
         client.file_job_new(files=[{'filename': 'x.pdf'}])
 
 
-def test_file_job_new_rejects_reserved_conversion_options(client: MathpixClient) -> None:
+def test_file_job_new_rejects_reserved_extra_options(client: MathpixClient) -> None:
     for reserved_key in ('files', 'job_id', 'metadata'):
         with pytest.raises(ValidationError):
             client.file_job_new(
                 files=[{'source_uri': 's3://bucket/a.pdf'}],
-                conversion_options={reserved_key: 'injected'},
+                extra_options={reserved_key: 'injected'},
             )
 
 

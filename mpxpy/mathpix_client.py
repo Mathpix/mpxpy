@@ -98,24 +98,24 @@ def _redact_uri(uri: Optional[str]) -> str:
     return f"{parsed.scheme}://{parsed.hostname or ''}"
 
 
-def _reject_reserved_conversion_options(
-        conversion_options: Optional[Dict[str, object]],
+def _reject_reserved_extra_options(
+        extra_options: Optional[Dict[str, object]],
         reserved: Set[str],
 ) -> None:
-    """Reject conversion_options keys that would override validated request fields.
+    """Reject extra_options keys that would override validated request fields.
 
-    The conversion_options pass-through is merged into the request body after the
+    The extra_options pass-through is merged into the request body after the
     explicit arguments, so without this check a caller could silently replace
     fields the method has already validated (e.g. source_uri, files, custom_id).
     """
-    has_conversion_options: bool = bool(conversion_options)
-    if not has_conversion_options:
+    has_extra_options: bool = bool(extra_options)
+    if not has_extra_options:
         return
-    conflicting: Set[str] = reserved.intersection(conversion_options or {})
+    conflicting: Set[str] = reserved.intersection(extra_options or {})
     has_conflicts: bool = bool(conflicting)
     if has_conflicts:
         raise ValidationError(
-            f"conversion_options may not override validated request fields: {', '.join(sorted(conflicting))}"
+            f"extra_options may not override validated request fields: {', '.join(sorted(conflicting))}"
         )
 
 
@@ -779,7 +779,7 @@ class MathpixClient:
             idempotency_key: Optional[str] = None,
             filename: Optional[str] = None,
             conversion_formats: Optional[Dict[str, bool]] = None,
-            conversion_options: Optional[Dict[str, object]] = None,
+            extra_options: Optional[Dict[str, object]] = None,
             destination_uri: Optional[str] = None,
             destination_basename: Optional[str] = None,
             s3_region: Optional[str] = None,
@@ -836,7 +836,7 @@ class MathpixClient:
                 '<file_id>.pdf').
             conversion_formats: Dict of format names to enable (e.g., {'docx': True,
                 'md': True}). Mathpix Markdown (mmd) is always produced.
-            conversion_options: Additional request options dict, merged into the
+            extra_options: Additional request options dict, merged into the
                 request body last. May not override the validated request fields
                 source_uri, job_id, custom_id, or metadata.
             destination_uri: Optional destination for results. Same scheme rules as
@@ -876,7 +876,7 @@ class MathpixClient:
             ValidationError: If not exactly one of source_uri and file_path is
                 provided, custom_id is supplied without job_id, custom_id or
                 idempotency_key is supplied for a local upload, or
-                conversion_options contains a reserved request field.
+                extra_options contains a reserved request field.
             FileNotFoundError: If the specified file_path does not exist.
             FilesApiError: If the API rejects the submission.
             MathpixClientError: If the request fails.
@@ -884,7 +884,7 @@ class MathpixClient:
         has_exactly_one_source: bool = sum(x is not None for x in [source_uri, file_path]) == 1
         if not has_exactly_one_source:
             raise ValidationError("Exactly one of source_uri or file_path must be provided")
-        _reject_reserved_conversion_options(conversion_options, {'source_uri', 'job_id', 'custom_id', 'metadata'})
+        _reject_reserved_extra_options(extra_options, {'source_uri', 'job_id', 'custom_id', 'metadata'})
         has_custom_id: bool = custom_id is not None
         if has_custom_id:
             has_job_id: bool = job_id is not None
@@ -900,7 +900,7 @@ class MathpixClient:
                 job_id=job_id,
                 filename=filename,
                 conversion_formats=conversion_formats,
-                conversion_options=conversion_options,
+                extra_options=extra_options,
                 destination_uri=destination_uri,
                 destination_basename=destination_basename,
                 s3_region=s3_region,
@@ -973,8 +973,8 @@ class MathpixClient:
             enable_tables_fallback=enable_tables_fallback,
             fullwidth_punctuation=fullwidth_punctuation,
         )
-        if conversion_options:
-            options.update(conversion_options)
+        if extra_options:
+            options.update(extra_options)
         logger.debug(f"Creating new file via Files API: source={_redact_uri(source_uri)}")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/uri')
         headers: Dict[str, str] = dict(self.auth.headers)
@@ -998,7 +998,7 @@ class MathpixClient:
             job_id: Optional[str] = None,
             filename: Optional[str] = None,
             conversion_formats: Optional[Dict[str, bool]] = None,
-            conversion_options: Optional[Dict[str, object]] = None,
+            extra_options: Optional[Dict[str, object]] = None,
             destination_uri: Optional[str] = None,
             destination_basename: Optional[str] = None,
             s3_region: Optional[str] = None,
@@ -1067,8 +1067,8 @@ class MathpixClient:
             enable_tables_fallback=enable_tables_fallback,
             fullwidth_punctuation=fullwidth_punctuation,
         )
-        if conversion_options:
-            options.update(conversion_options)
+        if extra_options:
+            options.update(extra_options)
         logger.debug("Creating new file via Files API multipart upload")
         path: Path = Path(file_path)
         is_existing_file: bool = path.is_file()
@@ -1100,7 +1100,7 @@ class MathpixClient:
             job_id: Optional[str] = None,
             idempotency_key: Optional[str] = None,
             conversion_formats: Optional[Dict[str, bool]] = None,
-            conversion_options: Optional[Dict[str, object]] = None,
+            extra_options: Optional[Dict[str, object]] = None,
             image_output_mode: Optional[str] = None,
             metadata: Optional[Dict[str, object]] = None,
             alphabets_allowed: Optional[Dict[str, str]] = None,
@@ -1150,7 +1150,7 @@ class MathpixClient:
                 job derivation.
             conversion_formats: Job-wide conversion formats, applied to every file
                 (e.g., {'docx': True, 'md': True}).
-            conversion_options: Additional request options dict, merged into the
+            extra_options: Additional request options dict, merged into the
                 request body last. May not override the validated request fields
                 files, job_id, or metadata.
             image_output_mode: Job-wide. Set to 'local' to write cropped images
@@ -1183,7 +1183,7 @@ class MathpixClient:
             ValidationError: If files is empty, an item is malformed or missing
                 source_uri, a custom_id is duplicated within the batch, any
                 custom_id is supplied without an explicit job_id, or
-                conversion_options contains a reserved request field.
+                extra_options contains a reserved request field.
             FilesApiError: If the API rejects the submission (e.g. over the
                 items-per-call ceiling or an identifier failing the
                 charset/length constraint).
@@ -1192,7 +1192,7 @@ class MathpixClient:
         has_files: bool = bool(files)
         if not has_files:
             raise ValidationError("files must be a non-empty list")
-        _reject_reserved_conversion_options(conversion_options, {'files', 'job_id', 'metadata'})
+        _reject_reserved_extra_options(extra_options, {'files', 'job_id', 'metadata'})
         normalized: List[Dict[str, Any]] = [normalize_file_submission(item) for item in files]
         has_explicit_job_id: bool = job_id is not None
         seen_custom_ids: Set[str] = set()
@@ -1243,8 +1243,8 @@ class MathpixClient:
             enable_tables_fallback=enable_tables_fallback,
             fullwidth_punctuation=fullwidth_punctuation,
         )
-        if conversion_options:
-            body.update(conversion_options)
+        if extra_options:
+            body.update(extra_options)
         headers: Dict[str, str] = dict(self.auth.headers)
         if has_idempotency_key:
             headers['Idempotency-Key'] = idempotency_key
@@ -1617,7 +1617,7 @@ class MathpixClient:
             filename: Optional display name for the file.
             scs_job_id: Forwarded as job_id.
             conversion_formats: Dict of format names to enable (e.g., {'mmd': True, 'docx': True}).
-            conversion_options: Additional conversion options dict.
+            conversion_options: Additional request options dict, forwarded as extra_options.
             destination_s3_uri: Forwarded as destination_uri.
             destination_basename: Optional basename for output files (defaults to file_id).
             s3_region: Region of the destination_s3_uri bucket.
@@ -1664,7 +1664,7 @@ class MathpixClient:
             job_id=scs_job_id,
             filename=filename,
             conversion_formats=conversion_formats,
-            conversion_options=conversion_options,
+            extra_options=conversion_options,
             destination_uri=destination_s3_uri,
             destination_basename=destination_basename,
             s3_region=s3_region,
