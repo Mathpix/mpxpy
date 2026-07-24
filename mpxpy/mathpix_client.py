@@ -119,6 +119,33 @@ def _reject_reserved_extra_options(
         )
 
 
+_IMAGE_REQUEST_OPTION_KEYS: Set[str] = {
+    'src', 'metadata', 'tags', 'async', 'callback', 'formats', 'data_options',
+    'include_detected_alphabets', 'alphabets_allowed', 'region', 'enable_blue_hsv_filter',
+    'confidence_threshold', 'confidence_rate_threshold', 'include_equation_tags',
+    'include_line_data', 'include_word_data', 'include_smiles', 'include_inchi',
+    'include_geometry_data', 'include_diagram_text', 'auto_rotate_confidence_threshold',
+    'rm_spaces', 'rm_fonts', 'idiomatic_eqn_arrays', 'idiomatic_braces',
+    'numbers_default_to_math', 'math_fonts_default_to_math', 'math_inline_delimiters',
+    'math_display_delimiters', 'enable_spell_check', 'enable_tables_fallback',
+    'fullwidth_punctuation', 'disable_itemize', 'disable_lstlisting', 'include_page_info',
+    'enable_document_layout',
+}
+
+_PDF_REQUEST_OPTION_KEYS: Set[str] = {
+    'url', 'metadata', 'alphabets_allowed', 'rm_spaces', 'rm_fonts', 'idiomatic_eqn_arrays',
+    'include_equation_tags', 'include_smiles', 'include_chemistry_as_image',
+    'include_diagram_text', 'numbers_default_to_math', 'math_inline_delimiters',
+    'math_display_delimiters', 'page_ranges', 'enable_spell_check', 'auto_number_sections',
+    'remove_section_numbering', 'preserve_section_numbering', 'enable_tables_fallback',
+    'fullwidth_punctuation', 'conversion_formats', 'file_batch_id', 'webhook_url',
+    'mathpix_webhook_secret', 'webhook_payload', 'webhook_enabled_events', 'disable_itemize',
+    'disable_lstlisting', 'include_page_info', 'include_page_breaks', 'conversion_options',
+}
+
+_CONVERSION_REQUEST_OPTION_KEYS: Set[str] = {'mmd', 'formats', 'conversion_options'}
+
+
 class MathpixClient:
     """Client for interacting with the Mathpix API.
 
@@ -192,22 +219,7 @@ class MathpixClient:
             fullwidth_punctuation: Optional[bool] = None,
             disable_itemize: Optional[bool] = None,
             disable_lstlisting: Optional[bool] = None,
-            include_chemistry: Optional[bool] = None,
             include_page_info: Optional[bool] = None,
-            language_hint: Optional[str] = None,
-            include_text_caption: Optional[bool] = None,
-            table_ocr_algorithm: Optional[str] = None,
-            include_chart_data: Optional[bool] = None,
-            include_detection_map: Optional[bool] = None,
-            include_font_size: Optional[bool] = None,
-            force_lines: Optional[bool] = None,
-            include_stats: Optional[bool] = None,
-            include_times: Optional[bool] = None,
-            ocr: Optional[List[str]] = None,
-            skip_recrop: Optional[bool] = None,
-            format_options: Optional[Dict[str, Any]] = None,
-            beam_size: Optional[int] = None,
-            n_best: Optional[int] = None,
             enable_document_layout: Optional[bool] = None,
             extra_options: Optional[Dict[str, Any]] = None
     ):
@@ -220,11 +232,11 @@ class MathpixClient:
             metadata: Optional dict to attach metadata to a request
             tags: Optional list of strings which can be used to identify results using the /v3/ocr-results endpoint
             is_async: Optional boolean to enable non-interactive requests
-            callback: Optional Callback Object (see https://docs.mathpix.com/#callback-object)
+            callback: Optional Callback Object (see https://docs.mathpix.com/reference/shared-types#callback-object)
             formats: Optional list of formats ('text', 'data', 'html', or 'latex_styled')
-            data_options: Optional DataOptions dict (see https://docs.mathpix.com/#dataoptions-object)
+            data_options: Optional DataOptions dict (see https://docs.mathpix.com/reference/post-v3-text#dataoptions-object)
             include_detected_alphabets: Optional boolean to return the detected alphabets
-            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/#alphabetsallowed-object)
+            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/reference/shared-types#alphabetsallowed-object)
             region: Optional dict to specify the image area with pixel coordinates 'top_left_x', 'top_left_y', 'width', 'height'
             enable_blue_hsv_filter: Optional boolean to enable a special mode of image processing where it processes blue hue text exclusively
             confidence_threshold: Optional number between 0 and 1 to specify a threshold for triggering confidence errors (file level threshold)
@@ -250,24 +262,9 @@ class MathpixClient:
             fullwidth_punctuation: Optional boolean to specify whether punctuation will be fullwidth Unicode
             disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
             disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
-            include_chemistry: Optional boolean to enable chemistry diagram OCR
             include_page_info: Optional boolean to include page info in the output
-            language_hint: Optional string to hint the primary language of the document
-            include_text_caption: Optional boolean to include captions for figures and tables
-            table_ocr_algorithm: Optional string to select the table OCR algorithm
-            include_chart_data: Optional boolean to return extracted data for charts
-            include_detection_map: Optional boolean to return the detection map of content types
-            include_font_size: Optional boolean to return detected font sizes
-            force_lines: Optional boolean to force line segmentation
-            include_stats: Optional boolean to include processing stats in the result
-            include_times: Optional boolean to include per-stage timing in the result
-            ocr: Optional list specifying recognition types, any of 'math' and 'text'
-            skip_recrop: Optional boolean to skip the automatic recrop step
-            format_options: Optional dict of per-format options (see https://docs.mathpix.com/#formatoptions-object)
-            beam_size: Optional int between 1 and 10 for the beam search width
-            n_best: Optional int (<= beam_size) for the number of candidate results to return
             enable_document_layout: Optional boolean to enable document layout analysis for "text" output
-            extra_options: Optional dict of raw request options merged into the request body, taking precedence over the other arguments. Escape hatch for API options this SDK version does not model yet; values are validated server-side
+            extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
         Returns:
             Image: A new Image instance.
@@ -278,6 +275,7 @@ class MathpixClient:
         if (file_path is None and url is None) or (file_path is not None and url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
+        _reject_reserved_extra_options(extra_options, _IMAGE_REQUEST_OPTION_KEYS)
         endpoint = urljoin(self.auth.api_url, 'v3/text')
         image_options: Dict[str, Any] = {
             "metadata": {
@@ -349,38 +347,8 @@ class MathpixClient:
             image_options["disable_itemize"] = disable_itemize
         if disable_lstlisting is not None:
             image_options["disable_lstlisting"] = disable_lstlisting
-        if include_chemistry is not None:
-            image_options["include_chemistry"] = include_chemistry
         if include_page_info is not None:
             image_options["include_page_info"] = include_page_info
-        if language_hint is not None:
-            image_options["language_hint"] = language_hint
-        if include_text_caption is not None:
-            image_options["include_text_caption"] = include_text_caption
-        if table_ocr_algorithm is not None:
-            image_options["table_ocr_algorithm"] = table_ocr_algorithm
-        if include_chart_data is not None:
-            image_options["include_chart_data"] = include_chart_data
-        if include_detection_map is not None:
-            image_options["include_detection_map"] = include_detection_map
-        if include_font_size is not None:
-            image_options["include_font_size"] = include_font_size
-        if force_lines is not None:
-            image_options["force_lines"] = force_lines
-        if include_stats is not None:
-            image_options["include_stats"] = include_stats
-        if include_times is not None:
-            image_options["include_times"] = include_times
-        if ocr is not None:
-            image_options["ocr"] = ocr
-        if skip_recrop is not None:
-            image_options["skip_recrop"] = skip_recrop
-        if format_options is not None:
-            image_options["format_options"] = format_options
-        if beam_size is not None:
-            image_options["beam_size"] = beam_size
-        if n_best is not None:
-            image_options["n_best"] = n_best
         if enable_document_layout is not None:
             image_options["enable_document_layout"] = enable_document_layout
         if not self.improve_mathpix:
@@ -468,15 +436,10 @@ class MathpixClient:
             mathpix_webhook_secret: Optional[str] = None,
             webhook_payload: Optional[Dict[str, Any]] = None,
             webhook_enabled_events: Optional[List[str]] = None,
-            tags: Optional[List[str]] = None,
             disable_itemize: Optional[bool] = None,
             disable_lstlisting: Optional[bool] = None,
-            include_chemistry: Optional[bool] = None,
             include_page_info: Optional[bool] = None,
             include_page_breaks: Optional[bool] = None,
-            language_hint: Optional[str] = None,
-            include_text_caption: Optional[bool] = None,
-            table_ocr_algorithm: Optional[str] = None,
             conversion_options: Optional[Dict[str, Any]] = None,
             extra_options: Optional[Dict[str, Any]] = None,
     ) -> Pdf:
@@ -486,7 +449,7 @@ class MathpixClient:
             file_path: Path to a local PDF file.
             url: URL of a remote PDF file.
             metadata: Optional dict to attach metadata to a request
-            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/#alphabetsallowed-object)
+            alphabets_allowed: Optional dict to list alphabets allowed in the output (see https://docs.mathpix.com/reference/shared-types#alphabetsallowed-object)
             rm_spaces: Optional boolean to determine whether extra white space is removed from equations in "latex_styled" and "text" formats
             rm_fonts: Optional boolean to determine whether font commands such as \mathbf and \mathrm are removed from equations in "latex_styled" and "text" formats
             idiomatic_eqn_arrays: Optional boolean to specify whether to use aligned, gathered, or cases instead of an array environment for a list of equations
@@ -520,17 +483,12 @@ class MathpixClient:
             mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
             webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
             webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
-            tags: Optional list of strings which can be used to identify results using the /v3/ocr-results endpoint
             disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
             disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
-            include_chemistry: Optional boolean to enable chemistry diagram OCR
             include_page_info: Optional boolean to include page info in the output
             include_page_breaks: Optional boolean to include page break markers in the output
-            language_hint: Optional string to hint the primary language of the document
-            include_text_caption: Optional boolean to include captions for figures and tables
-            table_ocr_algorithm: Optional string to select the table OCR algorithm
-            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/#conversionoptions-object)
-            extra_options: Optional dict of raw request options merged into the request body, taking precedence over the other arguments. Escape hatch for API options this SDK version does not model yet; values are validated server-side
+            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/reference/shared-types#conversion-options)
+            extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
         Returns:
             Pdf: A new Pdf instance
@@ -558,6 +516,7 @@ class MathpixClient:
         if (file_path is None and url is None) or (file_path is not None and url is not None):
             logger.error("Invalid parameters: Exactly one of file_path or url must be provided")
             raise ValidationError("Exactly one of file_path or url must be provided")
+        _reject_reserved_extra_options(extra_options, _PDF_REQUEST_OPTION_KEYS)
         if not self.improve_mathpix:
             logger.debug('improve_mathpix set to False on the client')
             improve_mathpix = False
@@ -610,24 +569,14 @@ class MathpixClient:
             options["enable_tables_fallback"] = enable_tables_fallback
         if fullwidth_punctuation:
             options["fullwidth_punctuation"] = fullwidth_punctuation
-        if tags is not None:
-            options["tags"] = tags
         if disable_itemize is not None:
             options["disable_itemize"] = disable_itemize
         if disable_lstlisting is not None:
             options["disable_lstlisting"] = disable_lstlisting
-        if include_chemistry is not None:
-            options["include_chemistry"] = include_chemistry
         if include_page_info is not None:
             options["include_page_info"] = include_page_info
         if include_page_breaks is not None:
             options["include_page_breaks"] = include_page_breaks
-        if language_hint is not None:
-            options["language_hint"] = language_hint
-        if include_text_caption is not None:
-            options["include_text_caption"] = include_text_caption
-        if table_ocr_algorithm is not None:
-            options["table_ocr_algorithm"] = table_ocr_algorithm
         if conversion_options is not None:
             options["conversion_options"] = conversion_options
         if file_batch_id:
@@ -831,8 +780,8 @@ class MathpixClient:
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
-            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/#conversionoptions-object)
-            extra_options: Optional dict of raw request options merged into the request body, taking precedence over the other arguments. Escape hatch for API options this SDK version does not model yet; values are validated server-side
+            conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/reference/shared-types#conversion-options)
+            extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
         Returns:
             Conversion: A new Conversion instance.
@@ -841,6 +790,7 @@ class MathpixClient:
             MathpixClientError: If the API request fails.
         """
         logger.debug("Starting new MMD conversion")
+        _reject_reserved_extra_options(extra_options, _CONVERSION_REQUEST_OPTION_KEYS)
         endpoint = urljoin(self.auth.api_url, 'v3/converter')
         options = {
             "mmd": mmd,

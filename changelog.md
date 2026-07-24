@@ -2,6 +2,7 @@
 
 ## July 24, 2026
 
+- Add documented request options to `image_new`, `pdf_new`, and `conversion_new`, plus an `extra_options` escape hatch for unmodeled API fields that cannot override modeled request fields
 - Support the public Files API v1
   - `file_new` submits a single document, taking exactly one of `source_uri` (a remote `s3://`, `gs://`, public `https://`, or Azure Blob URI, via `POST /files/v1/uri`) or `file_path` (a local file, via multipart `POST /files/v1`); both support `Idempotency-Key` retry safety, `(job_id, custom_id)` idempotency, and the `filename`, `s3_region`, and `include_page_info` options
   - `file_job_new` submits documents in bulk (with a server-enforced per-call ceiling) via `POST /files/v1/jobs`; the new `FileJob` class polls job status, lists files with a status filter and pagination iterator, and fetches files by `custom_id`
