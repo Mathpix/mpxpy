@@ -20,7 +20,8 @@ from mpxpy.batch import Batch
 from mpxpy.auth import Auth
 from mpxpy.logger import logger, configure_logging
 from mpxpy.errors import MathpixClientError, ValidationError, error_from_response
-from mpxpy.request_handler import post, get
+from mpxpy.request_handler import post, get, put
+from mpxpy.webhooks import WebhookConfig, verify_signature as _verify_signature
 
 
 def _apply_processing_options(
@@ -138,8 +139,8 @@ _PDF_REQUEST_OPTION_KEYS: Set[str] = {
     'include_diagram_text', 'numbers_default_to_math', 'math_inline_delimiters',
     'math_display_delimiters', 'page_ranges', 'enable_spell_check', 'auto_number_sections',
     'remove_section_numbering', 'preserve_section_numbering', 'enable_tables_fallback',
-    'fullwidth_punctuation', 'conversion_formats', 'file_batch_id', 'webhook_url',
-    'mathpix_webhook_secret', 'webhook_payload', 'webhook_enabled_events', 'disable_itemize',
+    'fullwidth_punctuation', 'conversion_formats', 'file_batch_id', 'callback_url',
+    'callback_headers', 'callback_events', 'disable_itemize',
     'disable_lstlisting', 'include_page_info', 'include_page_breaks', 'conversion_options',
 }
 
@@ -432,10 +433,9 @@ class MathpixClient:
             convert_to_html_zip: Optional[bool] = False,
             improve_mathpix: Optional[bool] = True,
             file_batch_id: Optional[str] = None,
-            webhook_url: Optional[str] = None,
-            mathpix_webhook_secret: Optional[str] = None,
-            webhook_payload: Optional[Dict[str, Any]] = None,
-            webhook_enabled_events: Optional[List[str]] = None,
+            callback_url: Optional[str] = None,
+            callback_headers: Optional[Dict[str, str]] = None,
+            callback_events: Optional[List[str]] = None,
             disable_itemize: Optional[bool] = None,
             disable_lstlisting: Optional[bool] = None,
             include_page_info: Optional[bool] = None,
@@ -479,10 +479,9 @@ class MathpixClient:
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with.
-            webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
-            mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
-            webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
-            webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+            callback_url: Optional URL to receive a webhook when processing completes. Overrides the account-default callback URL for this request
+            callback_headers: Optional dict of headers to include on the webhook delivery for this request
+            callback_events: Optional list of event names to subscribe to for this request
             disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
             disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
             include_page_info: Optional boolean to include page info in the output
@@ -497,16 +496,9 @@ class MathpixClient:
             ValueError: If neither file_path nor url, or both file_path and url are provided.
             FileNotFoundError: If the specified file_path does not exist.
             MathpixClientError: If the API request fails.
-            NotImplementedError: If the API URL is set to the production API and webhook or file_batch_id parameters are provided.
+            NotImplementedError: If the API URL is set to the production API and the file_batch_id parameter is provided.
         """
         if self.auth.api_url == 'https://api.mathpix.com':
-            if any([webhook_url, mathpix_webhook_secret, webhook_payload, webhook_enabled_events]):
-                logger.warning("Webhook features not available in production API")
-                raise NotImplementedError(
-                    "Webhook features are not yet available in the production API. "
-                    "These features will be enabled in a future release."
-                )
-
             if file_batch_id:
                 logger.warning("File batch features not available in production API")
                 raise NotImplementedError(
@@ -581,14 +573,12 @@ class MathpixClient:
             options["conversion_options"] = conversion_options
         if file_batch_id:
             options["file_batch_id"] = file_batch_id
-        if webhook_url:
-            options["webhook_url"] = webhook_url
-        if mathpix_webhook_secret:
-            options["mathpix_webhook_secret"] = mathpix_webhook_secret
-        if webhook_payload:
-            options["webhook_payload"] = webhook_payload
-        if webhook_enabled_events:
-            options["webhook_enabled_events"] = webhook_enabled_events
+        if callback_url is not None:
+            options["callback_url"] = callback_url
+        if callback_headers is not None:
+            options["callback_headers"] = callback_headers
+        if callback_events is not None:
+            options["callback_events"] = callback_events
         if convert_to_docx:
             options["conversion_formats"]['docx'] = True
         if convert_to_md:
@@ -645,10 +635,9 @@ class MathpixClient:
                         convert_to_html_zip=convert_to_html_zip,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
-                        webhook_url=webhook_url,
-                        mathpix_webhook_secret=mathpix_webhook_secret,
-                        webhook_payload=webhook_payload,
-                        webhook_enabled_events=webhook_enabled_events,
+                        callback_url=callback_url,
+                        callback_headers=callback_headers,
+                        callback_events=callback_events,
                         request_options=self.request_options,
                     )
                 except requests.exceptions.RequestException as e:
@@ -681,10 +670,9 @@ class MathpixClient:
                         convert_to_html_zip=convert_to_html_zip,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
-                        webhook_url=webhook_url,
-                        mathpix_webhook_secret=mathpix_webhook_secret,
-                        webhook_payload=webhook_payload,
-                        webhook_enabled_events=webhook_enabled_events,
+                        callback_url=callback_url,
+                        callback_headers=callback_headers,
+                        callback_events=callback_events,
                         request_options=self.request_options,
                     )
             except Exception as e:
@@ -886,6 +874,9 @@ class MathpixClient:
             preserve_section_numbering: Optional[bool] = True,
             enable_tables_fallback: Optional[bool] = False,
             fullwidth_punctuation: Optional[bool] = None,
+            callback_url: Optional[str] = None,
+            callback_headers: Optional[Dict[str, str]] = None,
+            callback_events: Optional[List[str]] = None,
     ) -> File:
         """Submit a single document for async processing.
 
@@ -948,6 +939,13 @@ class MathpixClient:
             preserve_section_numbering: Keep existing section numbering (default True).
             enable_tables_fallback: Enable advanced table processing (default False).
             fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
+            callback_url: Optional URL to receive a webhook when processing
+                completes. Overrides the account-default callback URL set via
+                webhook_config_set for this request.
+            callback_headers: Optional dict of headers to include on the webhook
+                delivery for this request.
+            callback_events: Optional list of event names to subscribe to for
+                this request.
 
         Returns:
             File: A new File instance for polling status and downloading results.
@@ -1006,6 +1004,9 @@ class MathpixClient:
                 preserve_section_numbering=preserve_section_numbering,
                 enable_tables_fallback=enable_tables_fallback,
                 fullwidth_punctuation=fullwidth_punctuation,
+                callback_url=callback_url,
+                callback_headers=callback_headers,
+                callback_events=callback_events,
             )
         has_source_uri: bool = bool(source_uri)
         if not has_source_uri:
@@ -1033,6 +1034,12 @@ class MathpixClient:
             options["custom_id"] = custom_id
         if job_id:
             options["job_id"] = job_id
+        if callback_url is not None:
+            options["callback_url"] = callback_url
+        if callback_headers is not None:
+            options["callback_headers"] = callback_headers
+        if callback_events is not None:
+            options["callback_events"] = callback_events
         _apply_processing_options(
             options,
             alphabets_allowed=alphabets_allowed,
@@ -1106,6 +1113,9 @@ class MathpixClient:
             preserve_section_numbering: Optional[bool] = True,
             enable_tables_fallback: Optional[bool] = False,
             fullwidth_punctuation: Optional[bool] = None,
+            callback_url: Optional[str] = None,
+            callback_headers: Optional[Dict[str, str]] = None,
+            callback_events: Optional[List[str]] = None,
     ) -> File:
         """Upload a local file via multipart POST /files/v1 for file_new.
 
@@ -1128,6 +1138,12 @@ class MathpixClient:
             options["image_output_mode"] = image_output_mode
         if include_page_info is not None:
             options["include_page_info"] = include_page_info
+        if callback_url is not None:
+            options["callback_url"] = callback_url
+        if callback_headers is not None:
+            options["callback_headers"] = callback_headers
+        if callback_events is not None:
+            options["callback_events"] = callback_events
         _apply_processing_options(
             options,
             alphabets_allowed=alphabets_allowed,
@@ -1207,6 +1223,9 @@ class MathpixClient:
             preserve_section_numbering: Optional[bool] = True,
             enable_tables_fallback: Optional[bool] = False,
             fullwidth_punctuation: Optional[bool] = None,
+            callback_url: Optional[str] = None,
+            callback_headers: Optional[Dict[str, str]] = None,
+            callback_events: Optional[List[str]] = None,
     ) -> FileJob:
         """Submit a batch of documents for async processing in one call.
 
@@ -1261,6 +1280,12 @@ class MathpixClient:
             preserve_section_numbering: Keep existing section numbering (default True).
             enable_tables_fallback: Enable advanced table processing (default False).
             fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
+            callback_url: Optional URL to receive a webhook when the job's files
+                complete. Job-wide; overrides the account-default callback URL.
+            callback_headers: Optional dict of headers to include on the webhook
+                delivery. Job-wide.
+            callback_events: Optional list of event names to subscribe to.
+                Job-wide.
 
         Returns:
             FileJob: A new FileJob instance seeded with the response's job_id and
@@ -1310,6 +1335,12 @@ class MathpixClient:
             body["conversion_formats"] = conversion_formats
         if image_output_mode:
             body["image_output_mode"] = image_output_mode
+        if callback_url is not None:
+            body["callback_url"] = callback_url
+        if callback_headers is not None:
+            body["callback_headers"] = callback_headers
+        if callback_events is not None:
+            body["callback_events"] = callback_events
         _apply_processing_options(
             body,
             alphabets_allowed=alphabets_allowed,
@@ -1455,6 +1486,160 @@ class MathpixClient:
         job_status: Dict[str, Any] = job.status()
         job.file_count = job_status.get('file_count')
         return job
+
+    def file_job_finalize(self, job_id: str) -> Dict[str, Any]:
+        """Finalize a job so its terminal 'job.completed' webhook can fire.
+
+        Performs POST /files/v1/jobs/{job_id}/finalize. Finalizing marks the job
+        as closed to new submissions; once every submitted file reaches a
+        terminal state the 'job.completed' event is delivered to the configured
+        callback. The call is idempotent: a second finalize keeps the original
+        finalized_at.
+
+        Args:
+            job_id: The job's identifier.
+
+        Returns:
+            dict: Response containing 'job_id', 'finalized_at', and 'message'.
+
+        Raises:
+            FilesApiError: If the job does not exist ('not_found').
+            MathpixClientError: If the request fails without a Files API error body.
+        """
+        logger.debug(f"Finalizing job {job_id}")
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/jobs/{job_id}/finalize')
+        try:
+            response: requests.Response = post(endpoint, headers=self.auth.headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise error_from_response(response)
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix Files API finalize request failed: {e}")
+
+    def webhook_config_get(self) -> WebhookConfig:
+        """Get the account-default webhook configuration.
+
+        Performs GET /files/v1/webhook-config. The first call mints the signing
+        secret used to verify webhook delivery signatures (see
+        mpxpy.webhooks.verify_signature). Subsequent calls return the same
+        secret along with the account-default callback target.
+
+        Returns:
+            WebhookConfig: The current webhook configuration.
+
+        Raises:
+            FilesApiError: If the request fails with a Files API error body.
+            MathpixClientError: If the request fails without a Files API error body.
+        """
+        logger.debug("Getting webhook config")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/webhook-config')
+        try:
+            response: requests.Response = get(endpoint, headers=self.auth.headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise error_from_response(response)
+            return WebhookConfig(response.json())
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix webhook config request failed: {e}")
+
+    def webhook_config_set(
+            self,
+            default_callback_url: Optional[str] = None,
+            default_callback_headers: Optional[Dict[str, str]] = None,
+            default_callback_events: Optional[List[str]] = None,
+    ) -> WebhookConfig:
+        """Set the account-default webhook configuration.
+
+        Performs PUT /files/v1/webhook-config. Only the fields you provide are
+        sent, so an omitted field is left unchanged. Submissions that do not
+        pass their own callback_url fall back to this account default.
+
+        Args:
+            default_callback_url: Account-default callback URL for webhook deliveries.
+            default_callback_headers: Account-default headers (str->str) to include
+                on webhook deliveries.
+            default_callback_events: Non-empty list of event names to subscribe
+                to by default. Omit to use the server defaults; an empty list is
+                rejected.
+
+        Returns:
+            WebhookConfig: The updated webhook configuration.
+
+        Raises:
+            ValidationError: If default_callback_events is an empty list.
+            FilesApiError: If the request fails with a Files API error body.
+            MathpixClientError: If the request fails without a Files API error body.
+        """
+        body: Dict[str, Any] = {}
+        if default_callback_url is not None:
+            body["default_callback_url"] = default_callback_url
+        if default_callback_headers is not None:
+            body["default_callback_headers"] = default_callback_headers
+        if default_callback_events is not None:
+            has_events: bool = bool(default_callback_events)
+            if not has_events:
+                raise ValidationError("default_callback_events must be a non-empty list; omit it to use the defaults")
+            body["default_callback_events"] = default_callback_events
+        logger.debug("Setting webhook config")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/webhook-config')
+        try:
+            response: requests.Response = put(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise error_from_response(response)
+            return WebhookConfig(response.json())
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix webhook config request failed: {e}")
+
+    def webhook_config_test(self) -> Dict[str, Any]:
+        """Send a test webhook to the configured default callback URL.
+
+        Performs POST /files/v1/webhook-config/test. The API returns HTTP 200
+        for both a delivered and a failed probe; this method returns the probe
+        body as-is and does NOT raise on a failed delivery (mirroring
+        data_source_test). It raises only if no default_callback_url is
+        configured or the request itself fails.
+
+        Returns:
+            dict: The probe body, containing 'status' ('delivered' or 'failed'),
+                'response_code' (int or None), and 'detail'.
+
+        Raises:
+            FilesApiError: If the request itself fails (e.g. no default callback
+                URL configured).
+            MathpixClientError: If the request fails without a Files API error body.
+        """
+        logger.debug("Testing webhook config")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/webhook-config/test')
+        try:
+            response: requests.Response = post(endpoint, headers=self.auth.headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise error_from_response(response)
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix webhook config test request failed: {e}")
+
+    @staticmethod
+    def verify_signature(
+            signature_header: str,
+            body: Union[bytes, str],
+            secret: str,
+            tolerance_seconds: int = 300,
+    ) -> bool:
+        """Verify a Mathpix webhook signature.
+
+        Convenience delegate to mpxpy.webhooks.verify_signature. Recomputes the
+        HMAC-SHA256 over the raw request body and compares it, in constant time,
+        to the header's v1 value, rejecting deliveries outside the replay
+        window. See mpxpy.webhooks.verify_signature for the full scheme.
+
+        Returns:
+            bool: True if the signature is valid and within the replay window,
+                False for any invalid or malformed input. Never raises.
+        """
+        return _verify_signature(signature_header, body, secret, tolerance_seconds)
 
     def onboarding_identities(self) -> Dict[str, Any]:
         """Get the Mathpix identities you grant cloud storage access to.

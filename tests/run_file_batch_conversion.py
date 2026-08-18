@@ -19,12 +19,8 @@ def process_pdf_folder(client):
         client.pdf_new(
             file_path=pdf_file_path,
             file_batch_id=file_batch.file_batch_id,
-            webhook_url="http://gateway:8080/webhook/convert-api",
-            mathpix_webhook_secret="test-secret",
-            webhook_payload={
-                "data": "test data"
-            },
-            webhook_enabled_events=["pdf_processing_complete"],
+            callback_url="http://gateway:8080/webhook/convert-api",
+            callback_events=["pdf_processing_complete"],
             conversion_formats={
                 "docx": True
             }

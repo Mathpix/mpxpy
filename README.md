@@ -555,6 +555,61 @@ For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to
 - `data_source_test(data_source_id)`: Runs the read/write probe; returns `{'result', 'checks', 'message'}` and does **not** raise on a failed probe — use it to diagnose grant issues after customer-side IAM changes.
 - `data_source_delete(data_source_id)`: Removes the registration; already-started work is not interrupted, and the bucket can be registered again later. Deleting the registration does not revoke access on the cloud side — remove the grant separately to revoke access.
 
+#### Webhooks
+
+The Files API can call a webhook when processing finishes, instead of you polling. Set an account-default callback once, override it per request when needed, and verify the signature on every delivery.
+
+Set the account default (the first `webhook_config_get` mints the signing secret):
+
+```python
+client.webhook_config_set(
+    default_callback_url="https://your-app.example.com/mathpix-webhook",
+    default_callback_headers={"Authorization": "Bearer your-token"},
+    default_callback_events=["file.completed", "job.completed"],
+)
+client.webhook_config_test()  # sends a test delivery; returns {'status': ..., 'response_code': ..., 'detail': ...}
+```
+
+Override the callback for a single submission:
+
+```python
+file = client.file_new(
+    source_uri="https://cdn.mathpix.com/examples/cs229-notes1.pdf",
+    conversion_formats={"docx": True},
+    callback_url="https://your-app.example.com/one-off-hook",
+)
+```
+
+For a batch job, the terminal `job.completed` event fires only after you finalize the job (once every file has been submitted):
+
+```python
+job = client.file_job_new(files=[...], job_id="contracts-2026-08")
+client.file_job_finalize("contracts-2026-08")  # or job.finalize()
+```
+
+Verify each delivery in your handler with the signing secret. Pass the exact raw request body (bytes), not the parsed JSON:
+
+```python
+from flask import Flask, request, abort
+from mpxpy.mathpix_client import MathpixClient
+from mpxpy.webhooks import verify_signature
+
+app = Flask(__name__)
+client = MathpixClient()
+signing_secret = client.webhook_config_get().signing_secret
+
+@app.route("/mathpix-webhook", methods=["POST"])
+def mathpix_webhook():
+    signature = request.headers.get("Mathpix-Signature", "")
+    if not verify_signature(signature, request.get_data(), signing_secret):
+        abort(400)
+    event = request.get_json()
+    # handle event...
+    return "", 200
+```
+
+`verify_signature` recomputes the HMAC-SHA256 over `"{t}.{raw_body}"` keyed by the signing secret and rejects deliveries whose timestamp is outside a replay window (300 seconds by default, configurable via `tolerance_seconds`). It returns `False` for any invalid or malformed input and never raises.
+
 ##### `MathpixClient.query_usage`
 
 Query API usage statistics.

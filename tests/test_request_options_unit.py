@@ -77,8 +77,8 @@ def test_pdf_new_sends_documented_and_extra_options(client: MathpixClient, tmp_p
 
 def test_pdf_new_rejects_modeled_extra_options(client: MathpixClient) -> None:
     for key in (
-            'url', 'metadata', 'conversion_formats', 'file_batch_id', 'webhook_url',
-            'mathpix_webhook_secret', 'webhook_payload', 'webhook_enabled_events',
+            'url', 'metadata', 'conversion_formats', 'file_batch_id', 'callback_url',
+            'callback_headers', 'callback_events',
             'conversion_options',
     ):
         with pytest.raises(ValidationError):

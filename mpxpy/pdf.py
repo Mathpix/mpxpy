@@ -32,10 +32,9 @@ class Pdf:
         convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
         improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
         file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
-        webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
-        mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
-        webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
-        webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+        callback_url: Optional URL to receive a webhook when processing completes.
+        callback_headers: Optional dict of headers to include on the webhook delivery.
+        callback_events: Optional list of event names to subscribe to.
     """
     def __init__(
             self,
@@ -55,10 +54,9 @@ class Pdf:
             convert_to_html_zip: Optional[bool] = False,
             improve_mathpix: Optional[bool] = False,
             file_batch_id: Optional[str] = None,
-            webhook_url: Optional[str] = None,
-            mathpix_webhook_secret: Optional[str] = None,
-            webhook_payload: Optional[Dict[str, Any]] = None,
-            webhook_enabled_events: Optional[List[str]] = None,
+            callback_url: Optional[str] = None,
+            callback_headers: Optional[Dict[str, str]] = None,
+            callback_events: Optional[List[str]] = None,
             request_options: Optional[Dict[str, Any]] = None,
     ):
         """Initialize a PDF instance.
@@ -80,10 +78,9 @@ class Pdf:
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
-            webhook_url: Optional URL to receive webhook notifications. (Not yet enabled)
-            mathpix_webhook_secret: Optional secret for webhook authentication. (Not yet enabled)
-            webhook_payload: Optional custom payload to include in webhooks. (Not yet enabled)
-            webhook_enabled_events: Optional list of events to trigger webhooks. (Not yet enabled)
+            callback_url: Optional URL to receive a webhook when processing completes.
+            callback_headers: Optional dict of headers to include on the webhook delivery.
+            callback_events: Optional list of event names to subscribe to.
 
         Raises:
             ValueError: If auth is not provided or pdf_id is empty.
@@ -110,10 +107,9 @@ class Pdf:
         self.convert_to_html_zip = convert_to_html_zip
         self.improve_mathpix=improve_mathpix
         self.file_batch_id = file_batch_id
-        self.webhook_url = webhook_url
-        self.mathpix_webhook_secret = mathpix_webhook_secret
-        self.webhook_payload = webhook_payload
-        self.webhook_enabled_events = webhook_enabled_events
+        self.callback_url = callback_url
+        self.callback_headers = callback_headers
+        self.callback_events = callback_events
         self.request_options = request_options or {}
 
     def wait_until_complete(self, timeout: int=60, ignore_conversions: bool=False):
