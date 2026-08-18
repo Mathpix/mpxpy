@@ -4,7 +4,7 @@
 
 - Add webhooks support
   - `webhook_config_get`/`webhook_config_set`/`webhook_config_test` manage the account-default callback URL, headers, and events (the first get mints the signing secret); new `WebhookConfig` resource object
-  - `callback_url`, `callback_headers`, and `callback_events` per-request params on `file_new`, `pdf_new`, `image_new`, `file_job_new`, and `scs_file_new` override the account default
+  - `callback_url`, `callback_headers`, and `callback_events` per-request params on `file_new`, `pdf_new`, and `file_job_new` override the account default
   - `verify_signature` verifies the `Mathpix-Signature` header (HMAC-SHA256 over `"{t}.{raw_body}"`) with a replay window; exported from the package and available as `MathpixClient.verify_signature`
   - `file_job_finalize(job_id)` (and `FileJob.finalize()`) finalize a job so its terminal `job.completed` webhook can fire
   - Removed the never-enabled legacy `webhook_url`/`mathpix_webhook_secret`/`webhook_payload`/`webhook_enabled_events` params from `pdf_new`/`Pdf`
