@@ -78,20 +78,22 @@ class WebhookConfig:
 
     Attributes:
         signing_secret: The secret used to sign and verify webhook deliveries.
-        default_callback_url: The account-default callback URL, or None.
-        default_callback_headers: Account-default callback headers, or None.
-        default_callback_events: Account-default subscribed event names, or None.
+        callback_url: The account-default callback URL, or None.
+        callback_headers: Account-default callback headers, or None.
+        callback_events: Account-default subscribed event names, or None.
     """
     def __init__(self, response: Dict[str, Any]) -> None:
         """Initialize a WebhookConfig from a webhook-config response dict.
 
         Args:
-            response: The JSON body from GET/PUT /files/v1/webhook-config.
+            response: The JSON body from GET/PUT /files/v1/webhook-config. Its
+                keys are the wire names default_callback_url/headers/events;
+                they are exposed here under the bare callback_* names.
         """
         self._signing_secret: Optional[str] = response.get('signing_secret')
-        self._default_callback_url: Optional[str] = response.get('default_callback_url')
-        self._default_callback_headers: Optional[Dict[str, str]] = response.get('default_callback_headers')
-        self._default_callback_events: Optional[List[str]] = response.get('default_callback_events')
+        self._callback_url: Optional[str] = response.get('default_callback_url')
+        self._callback_headers: Optional[Dict[str, str]] = response.get('default_callback_headers')
+        self._callback_events: Optional[List[str]] = response.get('default_callback_events')
 
     @property
     def signing_secret(self) -> Optional[str]:
@@ -99,26 +101,26 @@ class WebhookConfig:
         return self._signing_secret
 
     @property
-    def default_callback_url(self) -> Optional[str]:
+    def callback_url(self) -> Optional[str]:
         """The account-default callback URL, or None."""
-        return self._default_callback_url
+        return self._callback_url
 
     @property
-    def default_callback_headers(self) -> Optional[Dict[str, str]]:
+    def callback_headers(self) -> Optional[Dict[str, str]]:
         """The account-default callback headers, or None."""
-        return self._default_callback_headers
+        return self._callback_headers
 
     @property
-    def default_callback_events(self) -> Optional[List[str]]:
+    def callback_events(self) -> Optional[List[str]]:
         """The account-default subscribed event names, or None."""
-        return self._default_callback_events
+        return self._callback_events
 
     def to_dict(self) -> Dict[str, Any]:
         """Return the configuration as a dict, omitting unset fields."""
         fields: Dict[str, Any] = {
             'signing_secret': self._signing_secret,
-            'default_callback_url': self._default_callback_url,
-            'default_callback_headers': self._default_callback_headers,
-            'default_callback_events': self._default_callback_events,
+            'callback_url': self._callback_url,
+            'callback_headers': self._callback_headers,
+            'callback_events': self._callback_events,
         }
         return {key: value for key, value in fields.items() if value is not None}

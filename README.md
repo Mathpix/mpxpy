@@ -559,24 +559,25 @@ For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to
 
 The Files API can call a webhook when processing finishes, instead of you polling. Set an account-default callback once, override it per request when needed, and verify the signature on every delivery.
 
-Set the account default (the first `webhook_config_get` mints the signing secret):
+Set the account default (the first `webhook_config_get` mints the signing secret). `webhook_config_set` is a partial update: fields you pass are updated and fields you omit (leave as `None`) are preserved. (The API's PUT is a full replacement, so the SDK reads the current config and merges your changes over it.)
 
 ```python
 client.webhook_config_set(
-    default_callback_url="https://your-app.example.com/mathpix-webhook",
-    default_callback_headers={"Authorization": "Bearer your-token"},
-    default_callback_events=["file.completed", "job.completed"],
+    callback_url="https://your-app.example.com/mathpix-webhook",
+    callback_headers={"Authorization": "Bearer your-token"},
+    callback_events=["file.completed", "job.completed"],
 )
 client.webhook_config_test()  # sends a test delivery; returns {'status': ..., 'response_code': ..., 'detail': ...}
 ```
 
-Override the callback for a single submission:
+Override the callback for a single submission. A per-request `callback_url` does not inherit the account-default `callback_headers` (the server withholds account credentials from a per-request URL), so pass `callback_headers` too if the one-off endpoint needs auth:
 
 ```python
 file = client.file_new(
     source_uri="https://cdn.mathpix.com/examples/cs229-notes1.pdf",
     conversion_formats={"docx": True},
     callback_url="https://your-app.example.com/one-off-hook",
+    callback_headers={"Authorization": "Bearer one-off-token"},
 )
 ```
 
@@ -584,7 +585,7 @@ For a batch job, the terminal `job.completed` event fires only after you finaliz
 
 ```python
 job = client.file_job_new(files=[...], job_id="contracts-2026-08")
-client.file_job_finalize("contracts-2026-08")  # or job.finalize()
+job.finalize()  # or client.file_job_get("contracts-2026-08").finalize()
 ```
 
 Verify each delivery in your handler with the signing secret. Pass the exact raw request body (bytes), not the parsed JSON:

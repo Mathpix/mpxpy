@@ -331,6 +331,83 @@ def test_file_job_new_idempotency_key_header(client: MathpixClient) -> None:
     assert kwargs['headers']['Idempotency-Key'] == 'batch-key-1'
 
 
+# callback serialization
+# The reserved-key guard on file_new/file_job_new only matters if the explicit
+# callback args actually reach the request body; these lock in that they do.
+
+CALLBACK_URL = 'https://hook.example.com/cb'
+CALLBACK_HEADERS = {'Authorization': 'Bearer t'}
+CALLBACK_EVENTS = ['file.completed', 'job.completed']
+
+
+def test_file_new_uri_serializes_callback_params(client: MathpixClient) -> None:
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'file_id': 'abc-123'})
+        client.file_new(
+            source_uri='s3://bucket/doc.pdf',
+            callback_url=CALLBACK_URL,
+            callback_headers=CALLBACK_HEADERS,
+            callback_events=CALLBACK_EVENTS,
+        )
+    _, kwargs = mock_post.call_args
+    body = kwargs['json']
+    assert body['callback_url'] == CALLBACK_URL
+    assert body['callback_headers'] == CALLBACK_HEADERS
+    assert body['callback_events'] == CALLBACK_EVENTS
+
+
+def test_file_new_multipart_serializes_callback_params(client: MathpixClient, tmp_path) -> None:
+    doc = tmp_path / 'doc.pdf'
+    doc.write_bytes(b'%PDF-1.4 test')
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'file_id': 'f-local'})
+        client.file_new(
+            file_path=str(doc),
+            callback_url=CALLBACK_URL,
+            callback_headers=CALLBACK_HEADERS,
+            callback_events=CALLBACK_EVENTS,
+        )
+    _, kwargs = mock_post.call_args
+    options = json.loads(kwargs['data']['options_json'])
+    assert options['callback_url'] == CALLBACK_URL
+    assert options['callback_headers'] == CALLBACK_HEADERS
+    assert options['callback_events'] == CALLBACK_EVENTS
+
+
+def test_pdf_new_serializes_callback_params(client: MathpixClient, tmp_path) -> None:
+    doc = tmp_path / 'doc.pdf'
+    doc.write_bytes(b'%PDF-1.4 test')
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'pdf_id': 'p-1'})
+        client.pdf_new(
+            file_path=str(doc),
+            callback_url=CALLBACK_URL,
+            callback_headers=CALLBACK_HEADERS,
+            callback_events=CALLBACK_EVENTS,
+        )
+    _, kwargs = mock_post.call_args
+    options = json.loads(kwargs['data']['options_json'])
+    assert options['callback_url'] == CALLBACK_URL
+    assert options['callback_headers'] == CALLBACK_HEADERS
+    assert options['callback_events'] == CALLBACK_EVENTS
+
+
+def test_file_job_new_serializes_callback_params(client: MathpixClient) -> None:
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'job_id': 'job-1', 'file_count': 1})
+        client.file_job_new(
+            files=[{'source_uri': 's3://bucket/a.pdf'}],
+            callback_url=CALLBACK_URL,
+            callback_headers=CALLBACK_HEADERS,
+            callback_events=CALLBACK_EVENTS,
+        )
+    _, kwargs = mock_post.call_args
+    body = kwargs['json']
+    assert body['callback_url'] == CALLBACK_URL
+    assert body['callback_headers'] == CALLBACK_HEADERS
+    assert body['callback_events'] == CALLBACK_EVENTS
+
+
 # file_job_list
 
 def test_file_job_list_params(client: MathpixClient) -> None:

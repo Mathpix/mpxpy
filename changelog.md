@@ -3,10 +3,10 @@
 ## August 18, 2026
 
 - Add webhooks support
-  - `webhook_config_get`/`webhook_config_set`/`webhook_config_test` manage the account-default callback URL, headers, and events (the first get mints the signing secret); new `WebhookConfig` resource object
-  - `callback_url`, `callback_headers`, and `callback_events` per-request params on `file_new`, `pdf_new`, and `file_job_new` override the account default
-  - `verify_signature` verifies the `Mathpix-Signature` header (HMAC-SHA256 over `"{t}.{raw_body}"`) with a replay window; exported from the package and available as `MathpixClient.verify_signature`
-  - `file_job_finalize(job_id)` (and `FileJob.finalize()`) finalize a job so its terminal `job.completed` webhook can fire
+  - `webhook_config_get`/`webhook_config_set`/`webhook_config_test` manage the account-default `callback_url`, `callback_headers`, and `callback_events` (the first get mints the signing secret); new `WebhookConfig` resource object. `webhook_config_set` is a partial update: fields you pass are updated, fields you omit are preserved
+  - `callback_url`, `callback_headers`, and `callback_events` per-request params on `file_new`, `pdf_new`, and `file_job_new` override the account default (a per-request `callback_url` does not inherit the account-default headers)
+  - `verify_signature` verifies the `Mathpix-Signature` header (HMAC-SHA256 over `"{t}.{raw_body}"`) with a replay window; exported from the package (`from mpxpy.webhooks import verify_signature`)
+  - `FileJob.finalize()` finalizes a job so its terminal `job.completed` webhook can fire
   - Removed the never-enabled legacy `webhook_url`/`mathpix_webhook_secret`/`webhook_payload`/`webhook_enabled_events` params from `pdf_new`/`Pdf`
 
 ## July 24, 2026

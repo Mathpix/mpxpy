@@ -20,7 +20,7 @@ def process_pdf_folder(client):
             file_path=pdf_file_path,
             file_batch_id=file_batch.file_batch_id,
             callback_url="http://gateway:8080/webhook/convert-api",
-            callback_events=["pdf_processing_complete"],
+            callback_events=["file.completed"],
             conversion_formats={
                 "docx": True
             }

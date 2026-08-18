@@ -10,6 +10,7 @@ from typing import Any, Dict, Optional
 from unittest.mock import patch
 import pytest
 from mpxpy.mathpix_client import MathpixClient
+from mpxpy.file_job import FileJob
 from mpxpy.webhooks import verify_signature, WebhookConfig
 from mpxpy.errors import ValidationError, FilesApiError
 
@@ -85,6 +86,8 @@ def test_verify_signature_rejects_malformed_and_missing_fields() -> None:
 # webhook_config_get / set / test
 
 def test_webhook_config_get_returns_config(client: MathpixClient) -> None:
+    # The response carries the default_callback_* wire keys; WebhookConfig
+    # exposes them under the bare callback_* names.
     config_body = {
         "signing_secret": "whsec_abc",
         "default_callback_url": "https://example.com/hook",
@@ -96,26 +99,42 @@ def test_webhook_config_get_returns_config(client: MathpixClient) -> None:
         config = client.webhook_config_get()
     assert isinstance(config, WebhookConfig)
     assert config.signing_secret == "whsec_abc"
-    assert config.default_callback_url == "https://example.com/hook"
-    assert config.default_callback_headers == {"X-Token": "t"}
-    assert config.default_callback_events == ["job.completed"]
+    assert config.callback_url == "https://example.com/hook"
+    assert config.callback_headers == {"X-Token": "t"}
+    assert config.callback_events == ["job.completed"]
     args, _ = mock_get.call_args
     assert args[0].endswith("/files/v1/webhook-config")
 
 
-def test_webhook_config_set_sends_only_provided_fields(client: MathpixClient) -> None:
-    with patch("mpxpy.mathpix_client.put") as mock_put:
-        mock_put.return_value = FakeResponse(json_body={"signing_secret": "whsec_abc"})
-        config = client.webhook_config_set(default_callback_url="https://example.com/hook")
+def test_webhook_config_set_preserves_unspecified_fields(client: MathpixClient) -> None:
+    # Read-modify-write: setting only callback_url must preserve the existing headers
+    # and events (the API's PUT is full-replacement, so the SDK reads then merges).
+    # The bare callback_* params map onto the default_callback_* wire keys.
+    current = {
+        "signing_secret": "whsec_abc",
+        "default_callback_url": "https://old.example.com/hook",
+        "default_callback_headers": {"Authorization": "Bearer keep"},
+        "default_callback_events": ["file.completed"],
+    }
+    with patch("mpxpy.mathpix_client.get") as mock_get, \
+            patch("mpxpy.mathpix_client.put") as mock_put:
+        mock_get.return_value = FakeResponse(json_body=current)
+        mock_put.return_value = FakeResponse(json_body={**current, "default_callback_url": "https://new.example.com/hook"})
+        config = client.webhook_config_set(callback_url="https://new.example.com/hook")
     assert isinstance(config, WebhookConfig)
+    assert mock_get.called  # read-modify-write read the current config first
     args, kwargs = mock_put.call_args
     assert args[0].endswith("/files/v1/webhook-config")
-    assert kwargs["json"] == {"default_callback_url": "https://example.com/hook"}
+    assert kwargs["json"] == {
+        "default_callback_url": "https://new.example.com/hook",
+        "default_callback_headers": {"Authorization": "Bearer keep"},
+        "default_callback_events": ["file.completed"],
+    }
 
 
 def test_webhook_config_set_rejects_empty_events(client: MathpixClient) -> None:
     with pytest.raises(ValidationError):
-        client.webhook_config_set(default_callback_events=[])
+        client.webhook_config_set(callback_events=[])
 
 
 def test_webhook_config_test_returns_probe_without_raising(client: MathpixClient) -> None:
@@ -128,21 +147,23 @@ def test_webhook_config_test_returns_probe_without_raising(client: MathpixClient
     assert args[0].endswith("/files/v1/webhook-config/test")
 
 
-# file_job_finalize
+# FileJob.finalize
 
-def test_file_job_finalize_returns_map(client: MathpixClient) -> None:
+def test_filejob_finalize_returns_map(client: MathpixClient) -> None:
     finalize_body = {"job_id": "job-1", "finalized_at": "2026-08-18T00:00:00Z", "message": "finalized"}
-    with patch("mpxpy.mathpix_client.post") as mock_post:
+    job = FileJob(auth=client.auth, job_id="job-1")
+    with patch("mpxpy.file_job.post") as mock_post:
         mock_post.return_value = FakeResponse(json_body=finalize_body)
-        result = client.file_job_finalize("job-1")
+        result = job.finalize()
     assert result == finalize_body
     args, _ = mock_post.call_args
     assert args[0].endswith("/files/v1/jobs/job-1/finalize")
 
 
-def test_file_job_finalize_unknown_id_raises(client: MathpixClient) -> None:
-    with patch("mpxpy.mathpix_client.post") as mock_post:
+def test_filejob_finalize_unknown_id_raises(client: MathpixClient) -> None:
+    job = FileJob(auth=client.auth, job_id="job-missing")
+    with patch("mpxpy.file_job.post") as mock_post:
         mock_post.return_value = FakeResponse(status_code=404, json_body={"error": "not_found"})
         with pytest.raises(FilesApiError) as exc_info:
-            client.file_job_finalize("job-missing")
+            job.finalize()
     assert exc_info.value.error_id == "not_found"
