@@ -307,6 +307,7 @@ Returns a new Pdf instance.
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip
 - `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
 - `file_batch_id`: Optional batch ID to associate this file with.
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects events (`file.completed`, `file.error`).
 
 ##### `MathpixClient.conversion_new`
 
@@ -452,6 +453,7 @@ Submit a single document for async processing, from a remote URI (`POST /files/v
 - `image_output_mode`: Set to `'local'` to write cropped images into `destination_uri` storage instead of the Mathpix CDN.
 - `include_page_info`: Include per-page information in the output.
 - `metadata`: Optional dict to attach metadata to the request.
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects events (`file.completed`, `file.error`).
 - Plus the same OCR options as `pdf_new` (`alphabets_allowed`, `rm_spaces`, `include_smiles`, `math_inline_delimiters`, `page_ranges`, etc.).
 
 ##### `MathpixClient.file_job_new`
@@ -467,6 +469,7 @@ Submit a batch of documents in one call (the server enforces an items-per-call c
 - `image_output_mode`: Job-wide; `'local'` writes cropped images to each file's `destination_uri`.
 - `metadata`: Optional dict to attach metadata to the request.
 - `extra_options`: Additional request options dict merged into the request body — an escape hatch for API options this SDK version does not model yet (validated server-side). May not override the validated request fields.
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for the job (see [Webhooks](#webhooks)). `callback_events` may include `file.completed`, `file.error`, and `job.completed` (the batch event, delivered once after the job is finalized).
 - Plus the same OCR options as `pdf_new`, applied to every file in the request.
 
 ##### `MathpixClient.file_job_list`
@@ -505,6 +508,7 @@ Returned by `file_job_new` and `file_job_get`. Methods:
 - `files(status=None, limit=None, paging_state=None)`: One page of the job's file listing, optionally filtered to `pending`, `completed`, or `error`.
 - `files_iter(status=None, limit=None)`: Iterate over all files, following pagination.
 - `file_by_custom_id(custom_id)`: Fetch one file by the `(job_id, custom_id)` you supplied at submission.
+- `finalize()`: Mark the job as finalized so no more files can be added; required to arm the `job.completed` webhook, which is delivered once after finalize and after every file reaches a terminal state (see [Webhooks](#webhooks)). Idempotent; returns the finalize response (`job_id`, `finalized_at`, `message`).
 
 ##### Data sources (cloud storage setup)
 
@@ -558,6 +562,8 @@ For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to
 #### Webhooks
 
 The Files API can call a webhook when processing finishes, instead of you polling. Set an account-default callback once, override it per request when needed, and verify the signature on every delivery.
+
+The events are `file.completed` and `file.error` for a single document (success and failure), and `job.completed` for a finalized batch (delivered once). `webhook_config_get()` returns a `WebhookConfig` with `.signing_secret`, `.callback_url`, `.callback_headers`, and `.callback_events`; the first call mints the signing secret.
 
 Set the account default (the first `webhook_config_get` mints the signing secret). `webhook_config_set` is a partial update: fields you pass are updated and fields you omit (leave as `None`) are preserved. (The API's PUT is a full replacement, so the SDK reads the current config and merges your changes over it.)
 
