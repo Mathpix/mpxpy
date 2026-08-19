@@ -83,6 +83,26 @@ def test_verify_signature_rejects_malformed_and_missing_fields() -> None:
     assert verify_signature(f"t={int(time.time())}", body, SECRET) is False
 
 
+def test_verify_signature_rejects_empty_secret() -> None:
+    body = b'payload'
+    # A header that IS a valid HMAC keyed with the empty secret must still be
+    # rejected: an empty secret fails closed rather than keying the HMAC with it.
+    header = _sign(body, secret="")
+    assert verify_signature(header, body, "") is False
+
+
+def test_verify_signature_accepts_any_of_multiple_v1() -> None:
+    body = b'{"event":"job.completed"}'
+    t = int(time.time())
+    message = f"{t}.".encode("utf-8") + body
+    good = hmac.new(SECRET.encode("utf-8"), message, hashlib.sha256).hexdigest()
+    wrong = hmac.new(b"whsec_other", message, hashlib.sha256).hexdigest()
+    # During a secret rotation the header carries a v1 for each secret; a match
+    # on any one of them verifies.
+    assert verify_signature(f"t={t},v1={wrong},v1={good}", body, SECRET) is True
+    assert verify_signature(f"t={t},v1={wrong},v1={wrong}", body, SECRET) is False
+
+
 # webhook_config_get / set / test
 
 def test_webhook_config_get_returns_config(client: MathpixClient) -> None:

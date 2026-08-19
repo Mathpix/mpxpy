@@ -20,9 +20,11 @@ def verify_signature(
     with ``MathpixClient.webhook_config_get().signing_secret``.
 
     This function recomputes that HMAC over the raw request body and
-    constant-time compares it to the header's ``v1`` value, so it must be
+    constant-time compares it to the header's ``v1`` value(s), so it must be
     called with the exact bytes Mathpix sent, before any JSON parsing or
-    re-serialization changes them.
+    re-serialization changes them. A single header may carry more than one
+    ``v1`` entry during a secret rotation (the new and previous secret are both
+    signed for ~24h); the delivery is accepted if any ``v1`` matches.
 
     A replay window guards against a captured-and-replayed delivery: the
     signature is rejected when the header timestamp is more than
@@ -31,7 +33,8 @@ def verify_signature(
     Args:
         signature_header: The raw ``Mathpix-Signature`` header value.
         body: The exact raw request body, as bytes or a str (encoded UTF-8).
-        secret: The webhook signing secret.
+        secret: The webhook signing secret. An empty or otherwise falsy secret
+            fails closed (returns False) rather than keying the HMAC with it.
         tolerance_seconds: Maximum allowed age of the signature timestamp, in
             seconds (default 300). Deliveries outside this window are rejected.
 
@@ -40,20 +43,24 @@ def verify_signature(
             False for any invalid, malformed, or missing input. Never raises.
     """
     try:
-        has_inputs: bool = bool(signature_header) and secret is not None and body is not None
+        has_inputs: bool = bool(signature_header) and bool(secret) and body is not None
         if not has_inputs:
             return False
-        parsed: Dict[str, str] = {}
+        timestamp: Optional[str] = None
+        provided_signatures: List[str] = []
         for part in signature_header.split(','):
             has_separator: bool = '=' in part
             if not has_separator:
                 continue
             key, value = part.split('=', 1)
-            parsed[key.strip()] = value.strip()
-        timestamp: Optional[str] = parsed.get('t')
-        provided_signature: Optional[str] = parsed.get('v1')
-        has_required_fields: bool = bool(timestamp) and bool(provided_signature)
-        if not has_required_fields:
+            key = key.strip()
+            value = value.strip()
+            if key == 't':
+                timestamp = value
+            elif key == 'v1':
+                provided_signatures.append(value)
+        has_v1: bool = len(provided_signatures) > 0
+        if timestamp is None or not has_v1:
             return False
         timestamp_seconds: int = int(timestamp)
         is_within_window: bool = abs(time.time() - timestamp_seconds) <= tolerance_seconds
@@ -62,7 +69,7 @@ def verify_signature(
         body_bytes: bytes = body.encode('utf-8') if isinstance(body, str) else body
         message: bytes = f"{timestamp}.".encode('utf-8') + body_bytes
         expected_signature: str = hmac.new(secret.encode('utf-8'), message, hashlib.sha256).hexdigest()
-        return hmac.compare_digest(expected_signature, provided_signature)
+        return any(hmac.compare_digest(expected_signature, provided) for provided in provided_signatures)
     except Exception:
         return False
 
@@ -115,12 +122,35 @@ class WebhookConfig:
         """The account-default subscribed event names, or None."""
         return self._callback_events
 
-    def to_dict(self) -> Dict[str, Any]:
-        """Return the configuration as a dict, omitting unset fields."""
-        fields: Dict[str, Any] = {
-            'signing_secret': self._signing_secret,
-            'callback_url': self._callback_url,
-            'callback_headers': self._callback_headers,
-            'callback_events': self._callback_events,
+    @classmethod
+    def from_callback_values(
+            cls,
+            callback_url: Optional[str] = None,
+            callback_headers: Optional[Dict[str, str]] = None,
+            callback_events: Optional[List[str]] = None,
+    ) -> "WebhookConfig":
+        """Build a WebhookConfig from bare callback values (no signing secret).
+
+        Used to assemble the write-direction payload after a read-modify-write
+        merge, so the wire key names stay owned by this class rather than the
+        client method that writes them.
+        """
+        config: "WebhookConfig" = cls({})
+        config._callback_url = callback_url
+        config._callback_headers = callback_headers
+        config._callback_events = callback_events
+        return config
+
+    def to_request_body(self) -> Dict[str, Any]:
+        """Return the PUT /files/v1/webhook-config write payload.
+
+        Emits all three ``default_callback_*`` wire keys (the server replaces the
+        whole configuration on write, so every field is sent) and deliberately
+        excludes the server-managed ``signing_secret``. This is the single place
+        the write-direction wire key names live.
+        """
+        return {
+            'default_callback_url': self._callback_url,
+            'default_callback_headers': self._callback_headers,
+            'default_callback_events': self._callback_events,
         }
-        return {key: value for key, value in fields.items() if value is not None}

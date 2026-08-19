@@ -88,6 +88,25 @@ def _apply_processing_options(
         options["fullwidth_punctuation"] = fullwidth_punctuation
 
 
+def _apply_callback_options(
+        target: Dict[str, Any],
+        callback_url: Optional[str] = None,
+        callback_headers: Optional[Dict[str, str]] = None,
+        callback_events: Optional[List[str]] = None,
+) -> None:
+    """Add the per-request webhook callback fields to a request body dict.
+
+    Only fields the caller set are added, matching the request shape used across
+    the client's submission methods.
+    """
+    if callback_url is not None:
+        target["callback_url"] = callback_url
+    if callback_headers is not None:
+        target["callback_headers"] = callback_headers
+    if callback_events is not None:
+        target["callback_events"] = callback_events
+
+
 def _redact_uri(uri: Optional[str]) -> str:
     """Reduce a URI to its scheme and host for logging.
 
@@ -573,12 +592,7 @@ class MathpixClient:
             options["conversion_options"] = conversion_options
         if file_batch_id:
             options["file_batch_id"] = file_batch_id
-        if callback_url is not None:
-            options["callback_url"] = callback_url
-        if callback_headers is not None:
-            options["callback_headers"] = callback_headers
-        if callback_events is not None:
-            options["callback_events"] = callback_events
+        _apply_callback_options(options, callback_url, callback_headers, callback_events)
         if convert_to_docx:
             options["conversion_formats"]['docx'] = True
         if convert_to_md:
@@ -1043,12 +1057,7 @@ class MathpixClient:
             options["custom_id"] = custom_id
         if job_id:
             options["job_id"] = job_id
-        if callback_url is not None:
-            options["callback_url"] = callback_url
-        if callback_headers is not None:
-            options["callback_headers"] = callback_headers
-        if callback_events is not None:
-            options["callback_events"] = callback_events
+        _apply_callback_options(options, callback_url, callback_headers, callback_events)
         _apply_processing_options(
             options,
             alphabets_allowed=alphabets_allowed,
@@ -1147,12 +1156,7 @@ class MathpixClient:
             options["image_output_mode"] = image_output_mode
         if include_page_info is not None:
             options["include_page_info"] = include_page_info
-        if callback_url is not None:
-            options["callback_url"] = callback_url
-        if callback_headers is not None:
-            options["callback_headers"] = callback_headers
-        if callback_events is not None:
-            options["callback_events"] = callback_events
+        _apply_callback_options(options, callback_url, callback_headers, callback_events)
         _apply_processing_options(
             options,
             alphabets_allowed=alphabets_allowed,
@@ -1352,12 +1356,7 @@ class MathpixClient:
             body["conversion_formats"] = conversion_formats
         if image_output_mode:
             body["image_output_mode"] = image_output_mode
-        if callback_url is not None:
-            body["callback_url"] = callback_url
-        if callback_headers is not None:
-            body["callback_headers"] = callback_headers
-        if callback_events is not None:
-            body["callback_events"] = callback_events
+        _apply_callback_options(body, callback_url, callback_headers, callback_events)
         _apply_processing_options(
             body,
             alphabets_allowed=alphabets_allowed,
@@ -1569,11 +1568,12 @@ class MathpixClient:
         # The API's PUT is a full replacement, so read the current config and overlay only the
         # fields the caller provided; fields left as None are preserved (read-modify-write).
         current: WebhookConfig = self.webhook_config_get()
-        body: Dict[str, Any] = {
-            "default_callback_url": callback_url if callback_url is not None else current.callback_url,
-            "default_callback_headers": callback_headers if callback_headers is not None else current.callback_headers,
-            "default_callback_events": callback_events if callback_events is not None else current.callback_events,
-        }
+        merged: WebhookConfig = WebhookConfig.from_callback_values(
+            callback_url=callback_url if callback_url is not None else current.callback_url,
+            callback_headers=callback_headers if callback_headers is not None else current.callback_headers,
+            callback_events=callback_events if callback_events is not None else current.callback_events,
+        )
+        body: Dict[str, Any] = merged.to_request_body()
         logger.debug("Setting webhook config")
         endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/webhook-config')
         try:

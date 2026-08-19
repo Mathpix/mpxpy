@@ -307,7 +307,7 @@ Returns a new Pdf instance.
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip
 - `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
 - `file_batch_id`: Optional batch ID to associate this file with.
-- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects events (`file.completed`, `file.error`).
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
 
 ##### `MathpixClient.conversion_new`
 
@@ -453,7 +453,7 @@ Submit a single document for async processing, from a remote URI (`POST /files/v
 - `image_output_mode`: Set to `'local'` to write cropped images into `destination_uri` storage instead of the Mathpix CDN.
 - `include_page_info`: Include per-page information in the output.
 - `metadata`: Optional dict to attach metadata to the request.
-- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects events (`file.completed`, `file.error`).
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
 - Plus the same OCR options as `pdf_new` (`alphabets_allowed`, `rm_spaces`, `include_smiles`, `math_inline_delimiters`, `page_ranges`, etc.).
 
 ##### `MathpixClient.file_job_new`
@@ -469,7 +469,7 @@ Submit a batch of documents in one call (the server enforces an items-per-call c
 - `image_output_mode`: Job-wide; `'local'` writes cropped images to each file's `destination_uri`.
 - `metadata`: Optional dict to attach metadata to the request.
 - `extra_options`: Additional request options dict merged into the request body — an escape hatch for API options this SDK version does not model yet (validated server-side). May not override the validated request fields.
-- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for the job (see [Webhooks](#webhooks)). `callback_events` may include `file.completed`, `file.error`, and `job.completed` (the batch event, delivered once after the job is finalized).
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for the job. `callback_events` may additionally include the batch `job.completed` event, delivered once after the job is finalized (see [Webhooks](#webhooks) for the event names).
 - Plus the same OCR options as `pdf_new`, applied to every file in the request.
 
 ##### `MathpixClient.file_job_list`
@@ -559,13 +559,13 @@ For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to
 - `data_source_test(data_source_id)`: Runs the read/write probe; returns `{'result', 'checks', 'message'}` and does **not** raise on a failed probe — use it to diagnose grant issues after customer-side IAM changes.
 - `data_source_delete(data_source_id)`: Removes the registration; already-started work is not interrupted, and the bucket can be registered again later. Deleting the registration does not revoke access on the cloud side — remove the grant separately to revoke access.
 
-#### Webhooks
+##### Webhooks
 
 The Files API can call a webhook when processing finishes, instead of you polling. Set an account-default callback once, override it per request when needed, and verify the signature on every delivery.
 
-The events are `file.completed` and `file.error` for a single document (success and failure), and `job.completed` for a finalized batch (delivered once). `webhook_config_get()` returns a `WebhookConfig` with `.signing_secret`, `.callback_url`, `.callback_headers`, and `.callback_events`; the first call mints the signing secret.
+The event names are `file.completed` and `file.error` for a single document (success and failure), and `job.completed` for a finalized batch (delivered once). This is the canonical event list; the per-request `callback_events` on the submission methods above draw from it.
 
-Set the account default (the first `webhook_config_get` mints the signing secret). `webhook_config_set` is a partial update: fields you pass are updated and fields you omit (leave as `None`) are preserved. (The API's PUT is a full replacement, so the SDK reads the current config and merges your changes over it.)
+Set the account default. `webhook_config_set` is a partial update: fields you pass are updated and fields you omit (leave as `None`) are preserved. (The API's PUT is a full replacement, so the SDK reads the current config and merges your changes over it.)
 
 ```python
 client.webhook_config_set(
@@ -615,7 +615,25 @@ def mathpix_webhook():
     return "", 200
 ```
 
-`verify_signature` recomputes the HMAC-SHA256 over `"{t}.{raw_body}"` keyed by the signing secret and rejects deliveries whose timestamp is outside a replay window (300 seconds by default, configurable via `tolerance_seconds`). It returns `False` for any invalid or malformed input and never raises.
+`verify_signature` recomputes the HMAC-SHA256 over `"{t}.{raw_body}"` keyed by the signing secret and rejects deliveries whose timestamp is outside a replay window (300 seconds by default, configurable via `tolerance_seconds`). A delivery header may carry more than one `v1` value during a secret rotation; a match on any one verifies. It returns `False` for any invalid or malformed input (including an empty secret) and never raises.
+
+##### `MathpixClient.webhook_config_get`
+
+Returns the account-default `WebhookConfig` with `.signing_secret`, `.callback_url`, `.callback_headers`, and `.callback_events`. The first call mints the signing secret used to verify delivery signatures.
+
+##### `MathpixClient.webhook_config_set`
+
+Update the account-default webhook configuration; returns the updated `WebhookConfig`. Read-modify-write over the API's full-replacement PUT, so fields you omit are preserved.
+
+###### `MathpixClient.webhook_config_set` Arguments
+
+- `callback_url`: Account-default callback URL for deliveries. `None` preserves the current value.
+- `callback_headers`: Account-default headers (str→str) sent on deliveries. `None` preserves the current value.
+- `callback_events`: Non-empty list of default event names (see the event list above). `None` preserves the current value; an empty list is rejected.
+
+##### `MathpixClient.webhook_config_test`
+
+Sends a test delivery to the configured callback URL and returns the probe body (`status`, `response_code`, `detail`). Does not raise on a failed delivery; raises only if no callback URL is configured or the request itself fails.
 
 ##### `MathpixClient.query_usage`
 
