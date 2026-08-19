@@ -103,68 +103,16 @@ def test_verify_signature_accepts_any_of_multiple_v1() -> None:
     assert verify_signature(f"t={t},v1={wrong},v1={wrong}", body, SECRET) is False
 
 
-# webhook_config_get / set / test
+# webhook_config_get
 
-def test_webhook_config_get_returns_config(client: MathpixClient) -> None:
-    # The response carries the default_callback_* wire keys; WebhookConfig
-    # exposes them under the bare callback_* names.
-    config_body = {
-        "signing_secret": "whsec_abc",
-        "default_callback_url": "https://example.com/hook",
-        "default_callback_headers": {"X-Token": "t"},
-        "default_callback_events": ["job.completed"],
-    }
+def test_webhook_config_get_returns_signing_secret(client: MathpixClient) -> None:
     with patch("mpxpy.mathpix_client.get") as mock_get:
-        mock_get.return_value = FakeResponse(json_body=config_body)
+        mock_get.return_value = FakeResponse(json_body={"signing_secret": "whsec_abc"})
         config = client.webhook_config_get()
     assert isinstance(config, WebhookConfig)
     assert config.signing_secret == "whsec_abc"
-    assert config.callback_url == "https://example.com/hook"
-    assert config.callback_headers == {"X-Token": "t"}
-    assert config.callback_events == ["job.completed"]
     args, _ = mock_get.call_args
     assert args[0].endswith("/files/v1/webhook-config")
-
-
-def test_webhook_config_set_preserves_unspecified_fields(client: MathpixClient) -> None:
-    # Read-modify-write: setting only callback_url must preserve the existing headers
-    # and events (the API's PUT is full-replacement, so the SDK reads then merges).
-    # The bare callback_* params map onto the default_callback_* wire keys.
-    current = {
-        "signing_secret": "whsec_abc",
-        "default_callback_url": "https://old.example.com/hook",
-        "default_callback_headers": {"Authorization": "Bearer keep"},
-        "default_callback_events": ["file.completed"],
-    }
-    with patch("mpxpy.mathpix_client.get") as mock_get, \
-            patch("mpxpy.mathpix_client.put") as mock_put:
-        mock_get.return_value = FakeResponse(json_body=current)
-        mock_put.return_value = FakeResponse(json_body={**current, "default_callback_url": "https://new.example.com/hook"})
-        config = client.webhook_config_set(callback_url="https://new.example.com/hook")
-    assert isinstance(config, WebhookConfig)
-    assert mock_get.called  # read-modify-write read the current config first
-    args, kwargs = mock_put.call_args
-    assert args[0].endswith("/files/v1/webhook-config")
-    assert kwargs["json"] == {
-        "default_callback_url": "https://new.example.com/hook",
-        "default_callback_headers": {"Authorization": "Bearer keep"},
-        "default_callback_events": ["file.completed"],
-    }
-
-
-def test_webhook_config_set_rejects_empty_events(client: MathpixClient) -> None:
-    with pytest.raises(ValidationError):
-        client.webhook_config_set(callback_events=[])
-
-
-def test_webhook_config_test_returns_probe_without_raising(client: MathpixClient) -> None:
-    probe = {"status": "failed", "response_code": 500, "detail": "endpoint returned 500"}
-    with patch("mpxpy.mathpix_client.post") as mock_post:
-        mock_post.return_value = FakeResponse(json_body=probe)
-        result = client.webhook_config_test()
-    assert result == probe
-    args, _ = mock_post.call_args
-    assert args[0].endswith("/files/v1/webhook-config/test")
 
 
 # FileJob.finalize

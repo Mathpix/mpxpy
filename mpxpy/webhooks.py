@@ -75,82 +75,24 @@ def verify_signature(
 
 
 class WebhookConfig:
-    """The account-default webhook configuration for the Files API.
+    """The webhook configuration for the Files API.
 
-    Returned by ``MathpixClient.webhook_config_get`` and
-    ``MathpixClient.webhook_config_set``. Wraps the webhook-config response with
-    read-only properties: the signing secret used to verify delivery signatures
-    and the account-default callback target applied to submissions that do not
-    override it per-request.
+    Returned by ``MathpixClient.webhook_config_get``. Wraps the webhook-config
+    response, exposing the signing secret used to verify webhook delivery
+    signatures (see ``mpxpy.webhooks.verify_signature``).
 
     Attributes:
         signing_secret: The secret used to sign and verify webhook deliveries.
-        callback_url: The account-default callback URL, or None.
-        callback_headers: Account-default callback headers, or None.
-        callback_events: Account-default subscribed event names, or None.
     """
     def __init__(self, response: Dict[str, Any]) -> None:
         """Initialize a WebhookConfig from a webhook-config response dict.
 
         Args:
-            response: The JSON body from GET/PUT /files/v1/webhook-config. Its
-                keys are the wire names default_callback_url/headers/events;
-                they are exposed here under the bare callback_* names.
+            response: The JSON body from GET /files/v1/webhook-config.
         """
         self._signing_secret: Optional[str] = response.get('signing_secret')
-        self._callback_url: Optional[str] = response.get('default_callback_url')
-        self._callback_headers: Optional[Dict[str, str]] = response.get('default_callback_headers')
-        self._callback_events: Optional[List[str]] = response.get('default_callback_events')
 
     @property
     def signing_secret(self) -> Optional[str]:
         """The secret used to sign and verify webhook deliveries."""
         return self._signing_secret
-
-    @property
-    def callback_url(self) -> Optional[str]:
-        """The account-default callback URL, or None."""
-        return self._callback_url
-
-    @property
-    def callback_headers(self) -> Optional[Dict[str, str]]:
-        """The account-default callback headers, or None."""
-        return self._callback_headers
-
-    @property
-    def callback_events(self) -> Optional[List[str]]:
-        """The account-default subscribed event names, or None."""
-        return self._callback_events
-
-    @classmethod
-    def from_callback_values(
-            cls,
-            callback_url: Optional[str] = None,
-            callback_headers: Optional[Dict[str, str]] = None,
-            callback_events: Optional[List[str]] = None,
-    ) -> "WebhookConfig":
-        """Build a WebhookConfig from bare callback values (no signing secret).
-
-        Used to assemble the write-direction payload after a read-modify-write
-        merge, so the wire key names stay owned by this class rather than the
-        client method that writes them.
-        """
-        config: "WebhookConfig" = cls({})
-        config._callback_url = callback_url
-        config._callback_headers = callback_headers
-        config._callback_events = callback_events
-        return config
-
-    def to_request_body(self) -> Dict[str, Any]:
-        """Return the PUT /files/v1/webhook-config write payload.
-
-        Emits all three ``default_callback_*`` wire keys (the server replaces the
-        whole configuration on write, so every field is sent) and deliberately
-        excludes the server-managed ``signing_secret``. This is the single place
-        the write-direction wire key names live.
-        """
-        return {
-            'default_callback_url': self._callback_url,
-            'default_callback_headers': self._callback_headers,
-            'default_callback_events': self._callback_events,
-        }

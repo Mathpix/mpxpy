@@ -307,7 +307,7 @@ Returns a new Pdf instance.
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip
 - `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
 - `file_batch_id`: Optional batch ID to associate this file with.
-- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
+- `callback_url` / `callback_headers` / `callback_events`: Webhook callback for this submission (see [Webhooks](#webhooks)). `callback_url` is the URL to notify on completion; `callback_headers` are sent on that delivery (e.g. an auth token your endpoint checks); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
 
 ##### `MathpixClient.conversion_new`
 
@@ -453,7 +453,7 @@ Submit a single document for async processing, from a remote URI (`POST /files/v
 - `image_output_mode`: Set to `'local'` to write cropped images into `destination_uri` storage instead of the Mathpix CDN.
 - `include_page_info`: Include per-page information in the output.
 - `metadata`: Optional dict to attach metadata to the request.
-- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for this submission (see [Webhooks](#webhooks)). `callback_url` overrides the account default; `callback_headers` are sent on that delivery (a per-request URL does not inherit the account-default headers); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
+- `callback_url` / `callback_headers` / `callback_events`: Webhook callback for this submission (see [Webhooks](#webhooks)). `callback_url` is the URL to notify on completion; `callback_headers` are sent on that delivery (e.g. an auth token your endpoint checks); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
 - Plus the same OCR options as `pdf_new` (`alphabets_allowed`, `rm_spaces`, `include_smiles`, `math_inline_delimiters`, `page_ranges`, etc.).
 
 ##### `MathpixClient.file_job_new`
@@ -561,29 +561,19 @@ For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to
 
 ##### Webhooks
 
-The Files API can call a webhook when processing finishes, instead of you polling. Set an account-default callback once, override it per request when needed, and verify the signature on every delivery.
+The Files API can call a webhook when processing finishes, instead of you polling. Pass the callback on each submission and verify the signature on every delivery.
 
-The event names are `file.completed` and `file.error` for a single document (success and failure), and `job.completed` for a finalized batch (delivered once). This is the canonical event list; the per-request `callback_events` on the submission methods above draw from it.
+The event names are `file.completed` and `file.error` for a single document (success and failure), and `job.completed` for a finalized batch (delivered once). This is the canonical event list that the per-request `callback_events` on the submission methods above draw from.
 
-Set the account default. `webhook_config_set` is a partial update: fields you pass are updated and fields you omit (leave as `None`) are preserved. (The API's PUT is a full replacement, so the SDK reads the current config and merges your changes over it.)
-
-```python
-client.webhook_config_set(
-    callback_url="https://your-app.example.com/mathpix-webhook",
-    callback_headers={"Authorization": "Bearer your-token"},
-    callback_events=["file.completed", "job.completed"],
-)
-client.webhook_config_test()  # sends a test delivery; returns {'status': ..., 'response_code': ..., 'detail': ...}
-```
-
-Override the callback for a single submission. A per-request `callback_url` does not inherit the account-default `callback_headers` (the server withholds account credentials from a per-request URL), so pass `callback_headers` too if the one-off endpoint needs auth:
+Set the callback per submission. Pass `callback_headers` if your endpoint needs auth (e.g. a bearer token you check on receipt), and `callback_events` to select which events to deliver:
 
 ```python
 file = client.file_new(
     source_uri="https://cdn.mathpix.com/examples/cs229-notes1.pdf",
     conversion_formats={"docx": True},
-    callback_url="https://your-app.example.com/one-off-hook",
-    callback_headers={"Authorization": "Bearer one-off-token"},
+    callback_url="https://your-app.example.com/mathpix-webhook",
+    callback_headers={"Authorization": "Bearer your-token"},
+    callback_events=["file.completed", "file.error"],
 )
 ```
 
@@ -619,21 +609,7 @@ def mathpix_webhook():
 
 ##### `MathpixClient.webhook_config_get`
 
-Returns the account-default `WebhookConfig` with `.signing_secret`, `.callback_url`, `.callback_headers`, and `.callback_events`. The first call mints the signing secret used to verify delivery signatures.
-
-##### `MathpixClient.webhook_config_set`
-
-Update the account-default webhook configuration; returns the updated `WebhookConfig`. Read-modify-write over the API's full-replacement PUT, so fields you omit are preserved.
-
-###### `MathpixClient.webhook_config_set` Arguments
-
-- `callback_url`: Account-default callback URL for deliveries. `None` preserves the current value.
-- `callback_headers`: Account-default headers (str→str) sent on deliveries. `None` preserves the current value.
-- `callback_events`: Non-empty list of default event names (see the event list above). `None` preserves the current value; an empty list is rejected.
-
-##### `MathpixClient.webhook_config_test`
-
-Sends a test delivery to the configured callback URL and returns the probe body (`status`, `response_code`, `detail`). Does not raise on a failed delivery; raises only if no callback URL is configured or the request itself fails.
+Returns a `WebhookConfig` carrying `.signing_secret` for your account. The first call mints the signing secret used to verify delivery signatures.
 
 ##### `MathpixClient.query_usage`
 
