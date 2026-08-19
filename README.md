@@ -580,7 +580,12 @@ file = client.file_new(
 For a batch job, the terminal `job.completed` event fires only after you finalize the job (once every file has been submitted):
 
 ```python
-job = client.file_job_new(files=[...], job_id="contracts-2026-08")
+job = client.file_job_new(
+    files=[...],
+    job_id="contracts-2026-08",
+    callback_url="https://your-app.example.com/mathpix-webhook",
+    callback_events=["job.completed"],
+)
 job.finalize()  # or client.file_job_get("contracts-2026-08").finalize()
 ```
 
