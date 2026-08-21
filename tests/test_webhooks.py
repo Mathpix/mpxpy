@@ -12,7 +12,7 @@ import pytest
 from mpxpy.mathpix_client import MathpixClient
 from mpxpy.file_job import FileJob
 from mpxpy.webhooks import verify_signature, WebhookConfig
-from mpxpy.errors import ValidationError, FilesApiError
+from mpxpy.errors import FilesApiError
 
 
 SECRET = "whsec_test_secret"
