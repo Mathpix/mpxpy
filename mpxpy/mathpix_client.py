@@ -1494,7 +1494,7 @@ class MathpixClient:
         return job
 
     def webhook_config_get(self) -> WebhookConfig:
-        """Get the webhook signing secret for your account.
+        """Get this app key's webhook signing secret.
 
         Performs GET /files/v1/webhook-config. The first call mints the signing
         secret used to verify webhook delivery signatures (see
@@ -1502,7 +1502,7 @@ class MathpixClient:
         secret.
 
         Returns:
-            WebhookConfig: Carries the signing_secret for your account.
+            WebhookConfig: Carries the signing_secret for this app key.
 
         Raises:
             FilesApiError: If the request fails with a Files API error body.

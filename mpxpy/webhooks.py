@@ -22,9 +22,10 @@ def verify_signature(
     This function recomputes that HMAC over the raw request body and
     constant-time compares it to the header's ``v1`` value(s), so it must be
     called with the exact bytes Mathpix sent, before any JSON parsing or
-    re-serialization changes them. A single header may carry more than one
-    ``v1`` entry during a secret rotation (the new and previous secret are both
-    signed for ~24h); the delivery is accepted if any ``v1`` matches.
+    re-serialization changes them. A delivery header carries a single ``v1``
+    value today; this function also accepts a header bearing more than one
+    ``v1`` and passes if any one matches, so it keeps working if signature
+    rotation is added later.
 
     A replay window guards against a captured-and-replayed delivery: the
     signature is rejected when the header timestamp is more than

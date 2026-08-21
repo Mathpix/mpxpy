@@ -469,7 +469,7 @@ Submit a batch of documents in one call (the server enforces an items-per-call c
 - `image_output_mode`: Job-wide; `'local'` writes cropped images to each file's `destination_uri`.
 - `metadata`: Optional dict to attach metadata to the request.
 - `extra_options`: Additional request options dict merged into the request body — an escape hatch for API options this SDK version does not model yet (validated server-side). May not override the validated request fields.
-- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook overrides for the job. `callback_events` may additionally include the batch `job.completed` event, delivered once after the job is finalized (see [Webhooks](#webhooks) for the event names).
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook settings for the job. With `callback_events` omitted, a job defaults to `job.completed` only (delivered once after the job is finalized); request the per-file `file.completed` / `file.error` events explicitly if you want them (see [Webhooks](#webhooks) for the event names).
 - Plus the same OCR options as `pdf_new`, applied to every file in the request.
 
 ##### `MathpixClient.file_job_list`
@@ -610,11 +610,11 @@ def mathpix_webhook():
     return "", 200
 ```
 
-`verify_signature` recomputes the HMAC-SHA256 over `"{t}.{raw_body}"` keyed by the signing secret and rejects deliveries whose timestamp is outside a replay window (300 seconds by default, configurable via `tolerance_seconds`). A delivery header may carry more than one `v1` value during a secret rotation; a match on any one verifies. It returns `False` for any invalid or malformed input (including an empty secret) and never raises.
+`verify_signature` recomputes the HMAC-SHA256 over `"{t}.{raw_body}"` keyed by the signing secret and rejects deliveries whose timestamp is outside a replay window (300 seconds by default, configurable via `tolerance_seconds`). A delivery header carries a single `v1` value today; `verify_signature` also accepts a header bearing multiple `v1` values (a match on any one verifies), so it keeps working if signature rotation is added later. It returns `False` for any invalid or malformed input (including an empty secret) and never raises.
 
 ##### `MathpixClient.webhook_config_get`
 
-Returns a `WebhookConfig` carrying `.signing_secret` for your account. The first call mints the signing secret used to verify delivery signatures.
+Returns a `WebhookConfig` carrying `.signing_secret` for this app key. Each app key has its own signing secret, fetched with the same app key you submit under; the first call mints it. Use the secret to verify delivery signatures.
 
 ##### `MathpixClient.query_usage`
 

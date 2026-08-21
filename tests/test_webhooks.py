@@ -97,8 +97,8 @@ def test_verify_signature_accepts_any_of_multiple_v1() -> None:
     message = f"{t}.".encode("utf-8") + body
     good = hmac.new(SECRET.encode("utf-8"), message, hashlib.sha256).hexdigest()
     wrong = hmac.new(b"whsec_other", message, hashlib.sha256).hexdigest()
-    # During a secret rotation the header carries a v1 for each secret; a match
-    # on any one of them verifies.
+    # A header carries a single v1 today; verify_signature also accepts multiple
+    # v1 values (forward-compat) and passes if any one matches.
     assert verify_signature(f"t={t},v1={wrong},v1={good}", body, SECRET) is True
     assert verify_signature(f"t={t},v1={wrong},v1={wrong}", body, SECRET) is False
 
