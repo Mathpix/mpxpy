@@ -6,7 +6,7 @@ import requests
 from mpxpy.auth import Auth
 from mpxpy.file import File
 from mpxpy.logger import logger
-from mpxpy.request_handler import get
+from mpxpy.request_handler import get, post
 from mpxpy.errors import ValidationError, error_from_response
 
 
@@ -242,6 +242,36 @@ class FileJob:
             request_options=self.request_options,
             status_result=result,
         )
+
+    def finalize(self) -> Dict[str, Any]:
+        """Finalize the job so its terminal 'job.completed' webhook can fire.
+
+        Performs POST /files/v1/jobs/{job_id}/finalize. A job_id is yours to
+        choose, so any later request naming the same job appends to it, and
+        Mathpix cannot tell a finished batch from one whose next request has not
+        arrived: finalizing is what says the batch is complete. Once every
+        submitted file reaches a terminal state, the 'job.completed' event is
+        delivered to the callback_url the batch was submitted with. A job that
+        is never finalized never sends 'job.completed'; its files' own
+        'file.completed' and 'file.error' deliveries are unaffected.
+
+        Finalize whenever you are done submitting, before or after the files
+        finish. The call is idempotent: a second finalize keeps the original
+        finalized_at.
+
+        Returns:
+            dict: Response containing 'job_id', 'finalized_at', and 'message'.
+
+        Raises:
+            FilesApiError: If the job does not exist ('not_found').
+        """
+        logger.debug(f"Finalizing job {self.job_id}")
+        endpoint: str = urljoin(self.auth.files_api_url, f'/files/v1/jobs/{quote(self.job_id, safe="")}/finalize')
+        response: requests.Response = post(endpoint, headers=self.auth.headers, **self.request_options)
+        has_failed: bool = not response.ok
+        if has_failed:
+            raise error_from_response(response)
+        return response.json()
 
 
 def normalize_file_submission(item: Union[FileSubmission, Dict[str, Any]]) -> Dict[str, Any]:

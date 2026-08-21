@@ -7,6 +7,7 @@ from mpxpy.pdf import Pdf
 from mpxpy.image import Image
 from mpxpy.conversion import Conversion
 from mpxpy.file_batch import FileBatch
+from mpxpy.webhooks import verify_signature, WebhookConfig
 from mpxpy.errors import (
     MathpixClientError,
     AuthenticationError,
@@ -27,6 +28,8 @@ __all__ = [
     "Image",
     "Conversion",
     "FileBatch",
+    "verify_signature",
+    "WebhookConfig",
     "MathpixClientError",
     "AuthenticationError",
     "ValidationError",
