@@ -307,7 +307,7 @@ Returns a new Pdf instance.
 - `convert_to_html_zip`: Optional boolean to automatically convert your result to html.zip
 - `improve_mathpix`: Optional boolean to enable Mathpix to retain user output. Default is true
 - `file_batch_id`: Optional batch ID to associate this file with.
-- `callback_url` / `callback_headers` / `callback_events`: Webhook callback for this submission (see [Webhooks](#webhooks)). `callback_url` is the URL to notify on completion; `callback_headers` are sent on that delivery (e.g. an auth token your endpoint checks); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
+- `callback_url` / `callback_headers` / `callback_events`: Webhook callback for this submission (see [Webhooks](#webhooks)). `callback_url` is the HTTPS URL to notify on completion — a submission without one is not notified at all; `callback_headers` are sent on that delivery (e.g. an auth token your endpoint checks); `callback_events` selects which events to deliver, defaulting to `['file.completed', 'file.error']` for one document, with `[]` turning deliveries off for just this submission.
 
 ##### `MathpixClient.conversion_new`
 
@@ -453,7 +453,7 @@ Submit a single document for async processing, from a remote URI (`POST /files/v
 - `image_output_mode`: Set to `'local'` to write cropped images into `destination_uri` storage instead of the Mathpix CDN.
 - `include_page_info`: Include per-page information in the output.
 - `metadata`: Optional dict to attach metadata to the request.
-- `callback_url` / `callback_headers` / `callback_events`: Webhook callback for this submission (see [Webhooks](#webhooks)). `callback_url` is the URL to notify on completion; `callback_headers` are sent on that delivery (e.g. an auth token your endpoint checks); `callback_events` selects which events to deliver (see [Webhooks](#webhooks) for the event names).
+- `callback_url` / `callback_headers` / `callback_events`: Webhook callback for this submission (see [Webhooks](#webhooks)). `callback_url` is the HTTPS URL to notify on completion — a submission without one is not notified at all; `callback_headers` are sent on that delivery (e.g. an auth token your endpoint checks); `callback_events` selects which events to deliver. The default follows the submission's shape, which `job_id` decides: without a `job_id` the document defaults to `['file.completed', 'file.error']`, while a document submitted into a job is batch-shaped and defaults to `['job.completed']` only, delivered after the job is finalized — pass `callback_events` explicitly to get per-document events on a job member. `[]` turns deliveries off for just this submission.
 - Plus the same OCR options as `pdf_new` (`alphabets_allowed`, `rm_spaces`, `include_smiles`, `math_inline_delimiters`, `page_ranges`, etc.).
 
 ##### `MathpixClient.file_job_new`
@@ -469,7 +469,7 @@ Submit a batch of documents in one call (the server enforces an items-per-call c
 - `image_output_mode`: Job-wide; `'local'` writes cropped images to each file's `destination_uri`.
 - `metadata`: Optional dict to attach metadata to the request.
 - `extra_options`: Additional request options dict merged into the request body — an escape hatch for API options this SDK version does not model yet (validated server-side). May not override the validated request fields.
-- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook settings for the job. With `callback_events` omitted, a job defaults to `job.completed` only (delivered once after the job is finalized); request the per-file `file.completed` / `file.error` events explicitly if you want them (see [Webhooks](#webhooks) for the event names).
+- `callback_url` / `callback_headers` / `callback_events`: Per-request webhook settings for the job. With `callback_events` omitted, a job defaults to `job.completed` only (delivered once after the job is finalized and every file has finished); request the per-file `file.completed` / `file.error` events explicitly if you want them, or pass `[]` to turn deliveries off for this batch (see [Webhooks](#webhooks) for the event names).
 - Plus the same OCR options as `pdf_new`, applied to every file in the request.
 
 ##### `MathpixClient.file_job_list`
@@ -508,7 +508,7 @@ Returned by `file_job_new` and `file_job_get`. Methods:
 - `files(status=None, limit=None, paging_state=None)`: One page of the job's file listing, optionally filtered to `pending`, `completed`, or `error`.
 - `files_iter(status=None, limit=None)`: Iterate over all files, following pagination.
 - `file_by_custom_id(custom_id)`: Fetch one file by the `(job_id, custom_id)` you supplied at submission.
-- `finalize()`: Mark the job as finalized so no more files can be added; required to arm the `job.completed` webhook, which is delivered once after finalize and after every file reaches a terminal state (see [Webhooks](#webhooks)). Idempotent; returns the finalize response (`job_id`, `finalized_at`, `message`).
+- `finalize()`: Mark the job as finalized so no more files can be added; required to arm the `job.completed` webhook, which is delivered once after finalize and after every file reaches a terminal state — a job that is never finalized never sends it (see [Webhooks](#webhooks)). Finalize whenever you are done submitting, before or after the files finish. Idempotent; returns the finalize response (`job_id`, `finalized_at`, `message`).
 
 ##### Data sources (cloud storage setup)
 
@@ -561,9 +561,11 @@ For AWS and Azure, call `DataSource.test()` afterward to verify the grant end-to
 
 ##### Webhooks
 
-The Files API can call a webhook when processing finishes, instead of you polling. Pass the callback on each submission and verify the signature on every delivery.
+The Files API can call a webhook when processing finishes, instead of you polling. Pass the callback on each submission and verify the signature on every delivery. Polling keeps working and stays the authoritative record: a missed delivery never loses a result.
 
-The event names are `file.completed` and `file.error` for a single document (success and failure), and `job.completed` for a finalized batch (delivered once). This is the canonical event list that the per-request `callback_events` on the submission methods above draw from.
+The event names are `file.completed` and `file.error` for a single document (success and failure), and `job.completed` for a finalized batch (delivered once). This is the canonical event list that the per-request `callback_events` on the submission methods above draw from. Without `callback_events`, the submission's shape decides, and `job_id` is what decides the shape: a document submitted without a `job_id` gets `file.completed` and `file.error`, while anything carrying a `job_id` — a batch, or a single `file_new` submitted into a job — gets `job.completed` only. An explicit `callback_events` decides alone, including `[]` as the off switch for that one submission.
+
+`file.completed` fires only once the document's OCR result and every conversion format the submission requested have settled, so a requested `docx` or `md` is downloadable the moment the delivery arrives; when the submission requested conversions the body carries a `formats` map with each format's own status. A conversion that fails does not turn the event into `file.error` — the OCR result is there, and the failed format shows up in `formats`.
 
 Set the callback per submission. Pass `callback_headers` if your endpoint needs auth (e.g. a bearer token you check on receipt), and `callback_events` to select which events to deliver:
 
@@ -610,11 +612,29 @@ def mathpix_webhook():
     return "", 200
 ```
 
-`verify_signature` recomputes the HMAC-SHA256 over `"{t}.{raw_body}"` keyed by the signing secret and rejects deliveries whose timestamp is outside a replay window (300 seconds by default, configurable via `tolerance_seconds`). A delivery header carries a single `v1` value today; `verify_signature` also accepts a header bearing multiple `v1` values (a match on any one verifies), so it keeps working if signature rotation is added later. It returns `False` for any invalid or malformed input (including an empty secret) and never raises.
+`verify_signature` recomputes the HMAC-SHA256 over `"{t}.{raw_body}"` keyed by the signing secret and rejects deliveries whose timestamp is outside a replay window (300 seconds by default, configurable via `tolerance_seconds`). The window is measured against your own machine's clock, so a handler whose clock is more than five minutes out rejects every delivery — keep it synchronized. A delivery header carries a single `v1` value today; `verify_signature` also accepts a header bearing multiple `v1` values (a match on any one verifies), so it keeps working if signature rotation is added later. `verify_signature` returns `False` for any invalid or malformed input (including an empty secret) and never raises.
+
+Delivery is at least once, so the same notification can arrive twice: deduplicate on `event` plus `file_id` (`event` plus `job_id` for `job.completed`), acknowledge with a 2xx as soon as you have durably accepted the delivery, and process afterward. A slow answer (over 10 seconds) counts as no answer and is retried; a client-error answer tells Mathpix the endpoint is misconfigured for that notification and stops its retries, so poll for anything missed.
 
 ##### `MathpixClient.webhook_config_get`
 
-Returns a `WebhookConfig` carrying `.signing_secret` for this app key. Each app key has its own signing secret, fetched with the same app key you submit under; the first call mints it. Use the secret to verify delivery signatures.
+Returns a `WebhookConfig` carrying your `.signing_secret`; the first call mints it. It is the only stored webhook setting — the destination, headers, and events are per-submission arguments.
+
+##### `MathpixClient.webhook_config_test`
+
+Sends one signed test delivery to a URL you name and returns the outcome synchronously, so you can verify a handler before any real document is involved:
+
+```python
+outcome = client.webhook_config_test(
+    callback_url="https://your-app.example.com/mathpix-webhook",
+    callback_headers={"Authorization": "Bearer your-token"},  # optional
+)
+# {'status': 'delivered', 'response_code': 200, 'detail': None}
+```
+
+- The sample is a `file.completed` body carrying the reserved diagnostic `file_id` `00000000-0000-0000-0000-000000000000`, which is never a real document, so your handler can recognize test deliveries structurally.
+- One attempt, no retries; up to 10 test deliveries per minute for your app.
+- An endpoint that refuses the test is not an error in this call: `status` is `'failed'` with the `response_code` your endpoint answered (`None` when no answer arrived) and a `detail` sentence. Only the request itself failing raises (e.g. a rejected `callback_url` or the rate limit).
 
 ##### `MathpixClient.query_usage`
 

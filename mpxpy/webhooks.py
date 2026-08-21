@@ -34,8 +34,9 @@ def verify_signature(
     Args:
         signature_header: The raw ``Mathpix-Signature`` header value.
         body: The exact raw request body, as bytes or a str (encoded UTF-8).
-        secret: The webhook signing secret. An empty or otherwise falsy secret
-            fails closed (returns False) rather than keying the HMAC with it.
+        secret: Your webhook signing secret. An empty or otherwise falsy
+            secret fails closed (returns False) rather than keying the HMAC
+            with it.
         tolerance_seconds: Maximum allowed age of the signature timestamp, in
             seconds (default 300). Deliveries outside this window are rejected.
 
@@ -80,7 +81,9 @@ class WebhookConfig:
 
     Returned by ``MathpixClient.webhook_config_get``. Wraps the webhook-config
     response, exposing the signing secret used to verify webhook delivery
-    signatures (see ``mpxpy.webhooks.verify_signature``).
+    signatures (see ``mpxpy.webhooks.verify_signature``). The signing secret is
+    the whole stored configuration: where a delivery goes, what headers it
+    carries, and which events fire are per-submission callback arguments.
 
     Attributes:
         signing_secret: The secret used to sign and verify webhook deliveries.

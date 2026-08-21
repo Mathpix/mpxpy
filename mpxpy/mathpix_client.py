@@ -498,9 +498,9 @@ class MathpixClient:
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with.
-            callback_url: Optional URL to receive a webhook when processing completes
-            callback_headers: Optional dict of headers to include on the webhook delivery (e.g. an auth token your endpoint checks)
-            callback_events: Optional list of event names to subscribe to for this request
+            callback_url: Optional HTTPS URL to receive this request's webhook deliveries. A request without one is not notified at all
+            callback_headers: Optional dict of headers sent on this request's deliveries (e.g. an auth token your endpoint checks). Requires callback_url, which the API enforces: either callback field without it is a 400. At most 10 headers, 4 KB in total, and names Mathpix sets (Host, Content-Type, Content-Length, Transfer-Encoding, Connection, User-Agent, any Mathpix- name) are rejected
+            callback_events: Optional list of event names for this request. One document is one event, so this defaults to ['file.completed', 'file.error']; an empty list turns deliveries off for just this request, keeping callback_url in place
             disable_itemize: Optional boolean to disable itemize/enumerate list environments, rendering list items as flat lines
             disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
             include_page_info: Optional boolean to include page info in the output
@@ -953,12 +953,25 @@ class MathpixClient:
             preserve_section_numbering: Keep existing section numbering (default True).
             enable_tables_fallback: Enable advanced table processing (default False).
             fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
-            callback_url: Optional URL to receive a webhook when processing
-                completes.
-            callback_headers: Optional dict of headers to include on the webhook
-                delivery (e.g. an auth token your endpoint checks).
-            callback_events: Optional list of event names to subscribe to for
-                this request.
+            callback_url: Optional HTTPS URL to receive this submission's
+                webhook deliveries. A submission without one is not notified at
+                all.
+            callback_headers: Optional dict of headers sent on this submission's
+                deliveries (e.g. an auth token your endpoint checks). Requires
+                callback_url, which the API enforces: either callback field
+                without it is a 400. At most 10 headers, 4 KB in total, and
+                names Mathpix sets (Host, Content-Type, Content-Length,
+                Transfer-Encoding, Connection, User-Agent, any Mathpix- name)
+                are rejected.
+            callback_events: Optional list of event names for this submission.
+                The default follows the submission's shape, which job_id
+                decides: without a job_id the document defaults to
+                ['file.completed', 'file.error'], while a document submitted
+                into a job is batch-shaped and defaults to ['job.completed']
+                only, delivered after the job is finalized. Pass this
+                explicitly to get per-document events on a job member. An empty
+                list turns deliveries off for just this submission, keeping
+                callback_url in place.
 
         Returns:
             File: A new File instance for polling status and downloading results.
@@ -1287,12 +1300,20 @@ class MathpixClient:
             preserve_section_numbering: Keep existing section numbering (default True).
             enable_tables_fallback: Enable advanced table processing (default False).
             fullwidth_punctuation: Use fullwidth Unicode punctuation (default None).
-            callback_url: Optional URL to receive a webhook when the job's files
-                complete. Job-wide.
-            callback_headers: Optional dict of headers to include on the webhook
-                delivery (e.g. an auth token your endpoint checks). Job-wide.
-            callback_events: Optional list of event names to subscribe to.
-                Job-wide.
+            callback_url: Optional HTTPS URL to receive this batch's webhook
+                deliveries. Job-wide; a batch without one is not notified at all.
+            callback_headers: Optional dict of headers sent on this batch's
+                deliveries (e.g. an auth token your endpoint checks). Job-wide,
+                and requires callback_url, which the API enforces: either
+                callback field without it is a 400. At most 10 headers, 4 KB in
+                total, and names Mathpix sets (Host, Content-Type,
+                Content-Length, Transfer-Encoding, Connection, User-Agent, any
+                Mathpix- name) are rejected.
+            callback_events: Optional list of event names for this batch.
+                Job-wide, and defaults to ['job.completed'], the single delivery
+                sent once the job is finalized and every file has finished; add
+                'file.completed' or 'file.error' for per-document deliveries, or
+                pass an empty list to turn deliveries off for this batch.
 
         Returns:
             FileJob: A new FileJob instance seeded with the response's job_id and
@@ -1494,15 +1515,17 @@ class MathpixClient:
         return job
 
     def webhook_config_get(self) -> WebhookConfig:
-        """Get this app key's webhook signing secret.
+        """Get your webhook signing secret.
 
         Performs GET /files/v1/webhook-config. The first call mints the signing
         secret used to verify webhook delivery signatures (see
         mpxpy.webhooks.verify_signature); subsequent calls return the same
-        secret.
+        secret. It is the only stored webhook setting: where a delivery goes,
+        what headers it carries, and which events fire are all per-submission
+        callback arguments.
 
         Returns:
-            WebhookConfig: Carries the signing_secret for this app key.
+            WebhookConfig: Carries your signing_secret.
 
         Raises:
             FilesApiError: If the request fails with a Files API error body.
@@ -1518,6 +1541,70 @@ class MathpixClient:
             return WebhookConfig(response.json())
         except requests.exceptions.RequestException as e:
             raise MathpixClientError(f"Mathpix webhook config request failed: {e}")
+
+    def webhook_config_test(
+            self,
+            callback_url: str,
+            callback_headers: Optional[Dict[str, str]] = None,
+    ) -> Dict[str, Any]:
+        """Send one signed test webhook delivery to a URL you name.
+
+        Performs POST /files/v1/webhook-config/test, which sends a single signed
+        sample delivery to callback_url and answers synchronously with the
+        outcome, before any real document is involved. Because the target is
+        named per call, an endpoint can be verified before any submission points
+        at it. The first call also mints the signing secret, like
+        webhook_config_get.
+
+        The sample is a 'file.completed' body carrying the reserved diagnostic
+        file_id '00000000-0000-0000-0000-000000000000', which is never a real
+        document, so a handler can recognize test deliveries structurally.
+
+        The test is a single attempt with no retries. Up to 10 test deliveries
+        per minute can be sent per app_key; beyond that the call fails with a
+        rate limit error until the next minute begins.
+
+        An endpoint that refuses the test is not an error in this call: the
+        probe body is returned as-is and a failed delivery does not raise, the
+        same way data_source_test reports a failed probe.
+
+        Args:
+            callback_url: The endpoint to send the test delivery to. The same
+                rules as callback_url at submission: HTTPS only, and URLs that
+                resolve to private or internal networks are rejected.
+            callback_headers: Optional dict of headers to send with the test, so
+                your endpoint's own authentication is verified too. The same
+                rules as callback_headers at submission.
+
+        Returns:
+            dict: The probe body: 'status' ('delivered' when your endpoint
+                accepted the delivery, 'failed' otherwise), 'response_code'
+                (the HTTP status your endpoint answered, or None when no answer
+                arrived), and 'detail' (a sentence saying what went wrong, or
+                None when the delivery succeeded).
+
+        Raises:
+            ValidationError: If callback_url is not a non-empty string.
+            FilesApiError: If the request itself fails with a Files API error
+                body (e.g. a rejected callback_url or a rate limit).
+            MathpixClientError: If the request fails without a Files API error body.
+        """
+        is_valid_callback_url: bool = isinstance(callback_url, str) and callback_url != ''
+        if not is_valid_callback_url:
+            raise ValidationError("callback_url must be a non-empty string")
+        logger.debug("Sending webhook test delivery")
+        endpoint: str = urljoin(self.auth.files_api_url, '/files/v1/webhook-config/test')
+        body: Dict[str, Any] = {"callback_url": callback_url}
+        if callback_headers is not None:
+            body["callback_headers"] = callback_headers
+        try:
+            response: requests.Response = post(endpoint, json=body, headers=self.auth.headers, **self.request_options)
+            has_failed: bool = not response.ok
+            if has_failed:
+                raise error_from_response(response)
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            raise MathpixClientError(f"Mathpix webhook test request failed: {e}")
 
     def onboarding_identities(self) -> Dict[str, Any]:
         """Get the Mathpix identities you grant cloud storage access to.

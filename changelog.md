@@ -5,7 +5,8 @@
 - Add webhooks support
   - `callback_url`, `callback_headers`, and `callback_events` per-request params on `file_new`, `pdf_new`, and `file_job_new` register the webhook callback for that submission
   - `verify_signature` verifies the `Mathpix-Signature` header (HMAC-SHA256 over `"{t}.{raw_body}"`) with a replay window; exported from the package (`from mpxpy.webhooks import verify_signature`)
-  - `webhook_config_get` returns a `WebhookConfig` carrying your account's `signing_secret` (the first call mints it) for use with `verify_signature`
+  - `webhook_config_get` returns a `WebhookConfig` carrying your `signing_secret` (the first call mints it) for use with `verify_signature`
+  - `webhook_config_test` sends one signed test delivery to a `callback_url` you name and returns the outcome (`status`, `response_code`, `detail`); a refused delivery is reported, not raised
   - `FileJob.finalize()` finalizes a job so its terminal `job.completed` webhook can fire
   - Removed the never-enabled legacy `webhook_url`/`mathpix_webhook_secret`/`webhook_payload`/`webhook_enabled_events` params from `pdf_new`/`Pdf`
 

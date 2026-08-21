@@ -32,9 +32,9 @@ class Pdf:
         convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
         improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
         file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
-        callback_url: Optional URL to receive a webhook when processing completes.
-        callback_headers: Optional dict of headers to include on the webhook delivery.
-        callback_events: Optional list of event names to subscribe to.
+        callback_url: Optional HTTPS URL to receive this request's webhook deliveries.
+        callback_headers: Optional dict of headers sent on this request's deliveries.
+        callback_events: Optional list of event names for this request; one document defaults to ['file.completed', 'file.error'].
     """
     def __init__(
             self,
@@ -78,9 +78,9 @@ class Pdf:
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
-            callback_url: Optional URL to receive a webhook when processing completes.
-            callback_headers: Optional dict of headers to include on the webhook delivery.
-            callback_events: Optional list of event names to subscribe to.
+            callback_url: Optional HTTPS URL to receive this request's webhook deliveries.
+            callback_headers: Optional dict of headers sent on this request's deliveries.
+            callback_events: Optional list of event names for this request; one document defaults to ['file.completed', 'file.error'].
 
         Raises:
             ValueError: If auth is not provided or pdf_id is empty.

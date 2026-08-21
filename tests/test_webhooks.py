@@ -12,7 +12,7 @@ import pytest
 from mpxpy.mathpix_client import MathpixClient
 from mpxpy.file_job import FileJob
 from mpxpy.webhooks import verify_signature, WebhookConfig
-from mpxpy.errors import FilesApiError
+from mpxpy.errors import ValidationError, FilesApiError
 
 
 SECRET = "whsec_test_secret"
@@ -113,6 +113,63 @@ def test_webhook_config_get_returns_signing_secret(client: MathpixClient) -> Non
     assert config.signing_secret == "whsec_abc"
     args, _ = mock_get.call_args
     assert args[0].endswith("/files/v1/webhook-config")
+
+
+# webhook_config_test
+
+def test_webhook_config_test_returns_probe_body(client: MathpixClient) -> None:
+    probe_body = {"status": "delivered", "response_code": 200, "detail": None}
+    with patch("mpxpy.mathpix_client.post") as mock_post:
+        mock_post.return_value = FakeResponse(json_body=probe_body)
+        outcome = client.webhook_config_test(
+            callback_url="https://example.com/hook",
+            callback_headers={"Authorization": "Bearer token"},
+        )
+    assert outcome == probe_body
+    args, kwargs = mock_post.call_args
+    assert args[0].endswith("/files/v1/webhook-config/test")
+    assert kwargs["json"] == {
+        "callback_url": "https://example.com/hook",
+        "callback_headers": {"Authorization": "Bearer token"},
+    }
+
+
+def test_webhook_config_test_omits_absent_headers(client: MathpixClient) -> None:
+    with patch("mpxpy.mathpix_client.post") as mock_post:
+        mock_post.return_value = FakeResponse(json_body={"status": "delivered", "response_code": 200, "detail": None})
+        client.webhook_config_test(callback_url="https://example.com/hook")
+    _, kwargs = mock_post.call_args
+    assert kwargs["json"] == {"callback_url": "https://example.com/hook"}
+
+
+def test_webhook_config_test_failed_probe_does_not_raise(client: MathpixClient) -> None:
+    # An endpoint that refuses the test is reported, not raised: the call itself
+    # succeeded and its body describes what the endpoint did.
+    probe_body = {"status": "failed", "response_code": None, "detail": "no response was received: Connection refused"}
+    with patch("mpxpy.mathpix_client.post") as mock_post:
+        mock_post.return_value = FakeResponse(json_body=probe_body)
+        outcome = client.webhook_config_test(callback_url="https://example.com/hook")
+    assert outcome == probe_body
+
+
+def test_webhook_config_test_rejected_url_raises(client: MathpixClient) -> None:
+    # The API's standalone error envelope, as the endpoint returns it for a
+    # callback_url it refuses.
+    error_body = {
+        "error": "bad_request",
+        "error_info": {"id": "bad_request", "message": "callback_url: callback_url must be https"},
+    }
+    with patch("mpxpy.mathpix_client.post") as mock_post:
+        mock_post.return_value = FakeResponse(status_code=400, json_body=error_body)
+        with pytest.raises(FilesApiError) as exc_info:
+            client.webhook_config_test(callback_url="http://example.com/hook")
+    assert exc_info.value.error_id == "bad_request"
+    assert exc_info.value.http_status == 400
+
+
+def test_webhook_config_test_requires_callback_url(client: MathpixClient) -> None:
+    with pytest.raises(ValidationError):
+        client.webhook_config_test(callback_url="")
 
 
 # FileJob.finalize

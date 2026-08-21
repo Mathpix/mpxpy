@@ -408,6 +408,21 @@ def test_file_job_new_serializes_callback_params(client: MathpixClient) -> None:
     assert body['callback_events'] == CALLBACK_EVENTS
 
 
+def test_callback_events_empty_list_is_sent(client: MathpixClient) -> None:
+    # An empty list is the documented off switch for one submission, so it must
+    # reach the wire rather than being dropped as a falsy value: absent means
+    # "the default for this submission's shape", [] means "no deliveries".
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value = FakeResponse(json_body={'file_id': 'abc-123'})
+        client.file_new(
+            source_uri='s3://bucket/doc.pdf',
+            callback_url=CALLBACK_URL,
+            callback_events=[],
+        )
+    _, kwargs = mock_post.call_args
+    assert kwargs['json']['callback_events'] == []
+
+
 # file_job_list
 
 def test_file_job_list_params(client: MathpixClient) -> None:

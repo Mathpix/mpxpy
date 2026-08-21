@@ -246,10 +246,17 @@ class FileJob:
     def finalize(self) -> Dict[str, Any]:
         """Finalize the job so its terminal 'job.completed' webhook can fire.
 
-        Performs POST /files/v1/jobs/{job_id}/finalize. Finalizing marks the job
-        as closed to new submissions; once every submitted file reaches a
-        terminal state the 'job.completed' event is delivered to the configured
-        callback. The call is idempotent: a second finalize keeps the original
+        Performs POST /files/v1/jobs/{job_id}/finalize. A job_id is yours to
+        choose, so any later request naming the same job appends to it, and
+        Mathpix cannot tell a finished batch from one whose next request has not
+        arrived: finalizing is what says the batch is complete. Once every
+        submitted file reaches a terminal state, the 'job.completed' event is
+        delivered to the callback_url the batch was submitted with. A job that
+        is never finalized never sends 'job.completed'; its files' own
+        'file.completed' and 'file.error' deliveries are unaffected.
+
+        Finalize whenever you are done submitting, before or after the files
+        finish. The call is idempotent: a second finalize keeps the original
         finalized_at.
 
         Returns:
