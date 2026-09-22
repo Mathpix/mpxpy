@@ -452,6 +452,7 @@ class MathpixClient:
             convert_to_pptx: Optional[bool] = False,
             convert_to_html_zip: Optional[bool] = False,
             convert_to_xlsx: Optional[bool] = False,
+            convert_to_mmd_overlay_pdf: Optional[bool] = False,
             improve_mathpix: Optional[bool] = True,
             file_batch_id: Optional[str] = None,
             callback_url: Optional[str] = None,
@@ -500,6 +501,7 @@ class MathpixClient:
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
             convert_to_xlsx: Optional boolean to automatically convert your result to xlsx
+            convert_to_mmd_overlay_pdf: Optional boolean to return your submitted PDF with an invisible, screen-reader-ready text layer added (PDF/UA tagged by default; PDF input only). Configure via conversion_options["mmd.overlay.pdf"]
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with.
             callback_url: Optional HTTPS URL to receive this request's webhook deliveries. A request without one is not notified at all
@@ -622,6 +624,8 @@ class MathpixClient:
             options["conversion_formats"]['html.zip'] = True
         if convert_to_xlsx:
             options["conversion_formats"]['xlsx'] = True
+        if convert_to_mmd_overlay_pdf:
+            options["conversion_formats"]['mmd.overlay.pdf'] = True
         if extra_options:
             options.update(extra_options)
         data = {
@@ -657,6 +661,7 @@ class MathpixClient:
                         convert_to_pptx=convert_to_pptx,
                         convert_to_html_zip=convert_to_html_zip,
                         convert_to_xlsx=convert_to_xlsx,
+                        convert_to_mmd_overlay_pdf=convert_to_mmd_overlay_pdf,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         callback_url=callback_url,
@@ -693,6 +698,7 @@ class MathpixClient:
                         convert_to_pptx=convert_to_pptx,
                         convert_to_html_zip=convert_to_html_zip,
                         convert_to_xlsx=convert_to_xlsx,
+                        convert_to_mmd_overlay_pdf=convert_to_mmd_overlay_pdf,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         callback_url=callback_url,

@@ -128,3 +128,18 @@ def test_conversion_new_sends_convert_to_xlsx(client: MathpixClient) -> None:
         mock_post.return_value.json.return_value = {'conversion_id': 'conversion-1'}
         client.conversion_new(mmd='# Document', convert_to_xlsx=True)
     assert mock_post.call_args.kwargs['json']['formats'] == {'xlsx': True}
+
+
+def test_pdf_new_sends_mmd_overlay_pdf_and_options(client: MathpixClient, tmp_path) -> None:
+    pdf_path = tmp_path / 'document.pdf'
+    pdf_path.write_bytes(b'%PDF-1.4')
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value.json.return_value = {'pdf_id': 'pdf-1'}
+        client.pdf_new(
+            file_path=str(pdf_path),
+            convert_to_mmd_overlay_pdf=True,
+            conversion_options={'mmd.overlay.pdf': {'pdf_ua': 2, 'validation_report': True}},
+        )
+    options = json.loads(mock_post.call_args.kwargs['data']['options_json'])
+    assert options['conversion_formats']['mmd.overlay.pdf'] is True
+    assert options['conversion_options'] == {'mmd.overlay.pdf': {'pdf_ua': 2, 'validation_report': True}}
