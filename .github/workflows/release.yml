@@ -1,0 +1,84 @@
+name: release
+
+# Cut a release by pushing a semver tag from master:
+#   git tag -a v0.0.23 -m "mpxpy v0.0.23" && git push origin v0.0.23
+# The guards below refuse a tag that is malformed, not on master, out of sync with the
+# pyproject.toml version, or not newer than the last one, so a mistaken tag fails before
+# anything is published. On success it uploads the sdist and wheel to PyPI and creates a
+# published (non-draft) GitHub release.
+#
+# One-time setup: add this repo as a Trusted Publisher for the mpxpy project on PyPI
+# (pypi.org -> the mpxpy project -> Settings -> Publishing -> add a GitHub publisher:
+# owner Mathpix, repo mpxpy, workflow release.yml, environment pypi). Trusted publishing
+# mints a short-lived OIDC token at publish time, so there is no PyPI token to store.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    environment: pypi
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate the tag
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          echo "Releasing tag: $tag"
+          if ! echo "$tag" | grep -Eq '^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$'; then
+            echo "::error::Tag '$tag' is not vX.Y.Z (optionally -prerelease). Not releasing."
+            exit 1
+          fi
+          if ! git branch -r --contains "$tag" | grep -q 'origin/master'; then
+            echo "::error::Tag '$tag' is not on master. Release only from master."
+            exit 1
+          fi
+          version=$(grep -E '^version *= *"' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
+          if [ "v$version" != "$tag" ]; then
+            echo "::error::Tag '$tag' does not match pyproject.toml version '$version'. Bump the version to match."
+            exit 1
+          fi
+          prev=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "^${tag}$" | head -1)
+          if [ -n "$prev" ]; then
+            newest=$(printf '%s\n%s\n' "$prev" "$tag" | sort -V | tail -1)
+            if [ "$newest" != "$tag" ]; then
+              echo "::error::Tag '$tag' is not newer than the last release '$prev'. Tags must go in order."
+              exit 1
+            fi
+            echo "Previous release: $prev"
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install
+        run: |
+          python -m pip install --upgrade pip build twine
+          pip install -e ".[dev]"
+
+      - name: Test
+        run: python -m pytest tests/test_request_options_unit.py tests/test_files_api_unit.py tests/test_webhooks.py
+
+      - name: Build
+        run: |
+          rm -rf dist build ./*.egg-info
+          python -m build
+          python -m twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+      - name: Create GitHub release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh release create "$GITHUB_REF_NAME" dist/* --title "$GITHUB_REF_NAME" --generate-notes

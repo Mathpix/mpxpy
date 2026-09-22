@@ -110,3 +110,21 @@ def test_conversion_new_rejects_modeled_extra_options(client: MathpixClient) -> 
                 convert_to_docx=True,
                 extra_options={key: 'override'},
             )
+
+
+def test_pdf_new_sends_convert_to_xlsx_and_include_hyperlinks(client: MathpixClient, tmp_path) -> None:
+    pdf_path = tmp_path / 'document.pdf'
+    pdf_path.write_bytes(b'%PDF-1.4')
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value.json.return_value = {'pdf_id': 'pdf-1'}
+        client.pdf_new(file_path=str(pdf_path), convert_to_xlsx=True, include_hyperlinks=True)
+    options = json.loads(mock_post.call_args.kwargs['data']['options_json'])
+    assert options['include_hyperlinks'] is True
+    assert options['conversion_formats']['xlsx'] is True
+
+
+def test_conversion_new_sends_convert_to_xlsx(client: MathpixClient) -> None:
+    with patch('mpxpy.mathpix_client.post') as mock_post:
+        mock_post.return_value.json.return_value = {'conversion_id': 'conversion-1'}
+        client.conversion_new(mmd='# Document', convert_to_xlsx=True)
+    assert mock_post.call_args.kwargs['json']['formats'] == {'xlsx': True}
