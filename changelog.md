@@ -2,7 +2,7 @@
 
 ## September 22, 2026
 
-- Automate PyPI releases. Pushing a `vX.Y.Z` tag from master runs `.github/workflows/release.yml`, which builds the sdist and wheel, publishes to PyPI, and creates a published (non-draft) GitHub release. The tag must be valid semver, sit on master, match the `pyproject.toml` version, and be newer than the last release, or the run fails before anything is published.
+- Automate PyPI releases. The package version is now derived from the git tag via setuptools-scm, so there is no version to bump by hand. Pushing a `vX.Y.Z` tag from master runs `.github/workflows/release.yml`, which builds the sdist and wheel, publishes to PyPI, and creates a published (non-draft) GitHub release. The tag must be valid semver, sit on master, and be newer than the last release, or the run fails before anything is published.
 - Add `convert_to_xlsx` to `pdf_new` and `conversion_new`, plus `to_xlsx_file`/`to_xlsx_bytes` on `Pdf` and `Conversion`, giving xlsx the same convenience flag as the other formats
 - Add `include_hyperlinks` to `pdf_new` to extract PDF link annotations into per-line `links` data
 

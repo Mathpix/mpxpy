@@ -28,11 +28,6 @@ jobs:
             echo "::error::Tag '$tag' is not on master. Release only from master."
             exit 1
           fi
-          version=$(grep -E '^version *= *"' pyproject.toml | head -1 | sed -E 's/.*"([^"]+)".*/\1/')
-          if [ "v$version" != "$tag" ]; then
-            echo "::error::Tag '$tag' does not match pyproject.toml version '$version'. Bump the version to match."
-            exit 1
-          fi
           prev=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | grep -v "^${tag}$" | head -1)
           if [ -n "$prev" ]; then
             newest=$(printf '%s\n%s\n' "$prev" "$tag" | sort -V | tail -1)
