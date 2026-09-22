@@ -410,6 +410,10 @@ class File:
         """Get the processed file result as html.zip bytes."""
         return self.bytes_result(conversion_format='html.zip')
 
+    def to_mmd_overlay_pdf_bytes(self) -> bytes:
+        """Get the accessible overlay PDF (your submitted PDF with an invisible text layer) as bytes."""
+        return self.bytes_result(conversion_format='mmd.overlay.pdf')
+
     def to_jpg_bytes(self) -> bytes:
         """Get the processed file result as JPG bytes."""
         return self.bytes_result(conversion_format='jpg')
@@ -443,6 +447,10 @@ class File:
     def to_xlsx_file(self, path: str) -> str:
         """Save the processed file result to an XLSX file at a local path."""
         return self.save_file(path=path, conversion_format='xlsx')
+
+    def to_mmd_overlay_pdf_file(self, path: str) -> str:
+        """Save the accessible overlay PDF (your submitted PDF with an invisible text layer) to a local path."""
+        return self.save_file(path=path, conversion_format='mmd.overlay.pdf')
 
     def to_pptx_file(self, path: str) -> str:
         """Save the processed file result to a PPTX file at a local path."""

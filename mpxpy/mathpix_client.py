@@ -160,7 +160,8 @@ _PDF_REQUEST_OPTION_KEYS: Set[str] = {
     'remove_section_numbering', 'preserve_section_numbering', 'enable_tables_fallback',
     'fullwidth_punctuation', 'conversion_formats', 'file_batch_id', 'callback_url',
     'callback_headers', 'callback_events', 'disable_itemize',
-    'disable_lstlisting', 'include_page_info', 'include_page_breaks', 'conversion_options',
+    'disable_lstlisting', 'include_page_info', 'include_page_breaks', 'include_hyperlinks',
+    'conversion_options',
 }
 
 _CONVERSION_REQUEST_OPTION_KEYS: Set[str] = {'mmd', 'formats', 'conversion_options'}
@@ -450,6 +451,8 @@ class MathpixClient:
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
             convert_to_html_zip: Optional[bool] = False,
+            convert_to_xlsx: Optional[bool] = False,
+            convert_to_mmd_overlay_pdf: Optional[bool] = False,
             improve_mathpix: Optional[bool] = True,
             file_batch_id: Optional[str] = None,
             callback_url: Optional[str] = None,
@@ -459,6 +462,7 @@ class MathpixClient:
             disable_lstlisting: Optional[bool] = None,
             include_page_info: Optional[bool] = None,
             include_page_breaks: Optional[bool] = None,
+            include_hyperlinks: Optional[bool] = None,
             conversion_options: Optional[Dict[str, Any]] = None,
             extra_options: Optional[Dict[str, Any]] = None,
     ) -> Pdf:
@@ -496,6 +500,8 @@ class MathpixClient:
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
+            convert_to_xlsx: Optional boolean to automatically convert your result to xlsx
+            convert_to_mmd_overlay_pdf: Optional boolean to return your submitted PDF with an invisible, screen-reader-ready text layer added (PDF/UA tagged by default; PDF input only). Configure via conversion_options["mmd.overlay.pdf"]
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with.
             callback_url: Optional HTTPS URL to receive this request's webhook deliveries. A request without one is not notified at all
@@ -505,6 +511,7 @@ class MathpixClient:
             disable_lstlisting: Optional boolean to disable the lstlisting environment for code blocks
             include_page_info: Optional boolean to include page info in the output
             include_page_breaks: Optional boolean to include page break markers in the output
+            include_hyperlinks: Optional boolean to extract PDF link annotations and attach them to line data (adds a per-line "links" field)
             conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/reference/shared-types#conversion-options)
             extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
@@ -588,6 +595,8 @@ class MathpixClient:
             options["include_page_info"] = include_page_info
         if include_page_breaks is not None:
             options["include_page_breaks"] = include_page_breaks
+        if include_hyperlinks is not None:
+            options["include_hyperlinks"] = include_hyperlinks
         if conversion_options is not None:
             options["conversion_options"] = conversion_options
         if file_batch_id:
@@ -613,6 +622,10 @@ class MathpixClient:
             options["conversion_formats"]['mmd.zip'] = True
         if convert_to_html_zip:
             options["conversion_formats"]['html.zip'] = True
+        if convert_to_xlsx:
+            options["conversion_formats"]['xlsx'] = True
+        if convert_to_mmd_overlay_pdf:
+            options["conversion_formats"]['mmd.overlay.pdf'] = True
         if extra_options:
             options.update(extra_options)
         data = {
@@ -647,6 +660,8 @@ class MathpixClient:
                         convert_to_mmd_zip=convert_to_mmd_zip,
                         convert_to_pptx=convert_to_pptx,
                         convert_to_html_zip=convert_to_html_zip,
+                        convert_to_xlsx=convert_to_xlsx,
+                        convert_to_mmd_overlay_pdf=convert_to_mmd_overlay_pdf,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         callback_url=callback_url,
@@ -682,6 +697,8 @@ class MathpixClient:
                         convert_to_mmd_zip=convert_to_mmd_zip,
                         convert_to_pptx=convert_to_pptx,
                         convert_to_html_zip=convert_to_html_zip,
+                        convert_to_xlsx=convert_to_xlsx,
+                        convert_to_mmd_overlay_pdf=convert_to_mmd_overlay_pdf,
                         improve_mathpix=improve_mathpix,
                         file_batch_id=file_batch_id,
                         callback_url=callback_url,
@@ -765,6 +782,7 @@ class MathpixClient:
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
             convert_to_html_zip: Optional[bool] = False,
+            convert_to_xlsx: Optional[bool] = False,
             conversion_options: Optional[Dict[str, Any]] = None,
             extra_options: Optional[Dict[str, Any]] = None,
     ):
@@ -782,6 +800,7 @@ class MathpixClient:
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
+            convert_to_xlsx: Optional boolean to automatically convert your result to xlsx
             conversion_options: Optional dict of per-format conversion options (see https://docs.mathpix.com/reference/shared-types#conversion-options)
             extra_options: Optional dict of unmodeled request options. Modeled request fields are rejected; values are validated server-side
 
@@ -818,6 +837,8 @@ class MathpixClient:
             options["formats"]['mmd.zip'] = True
         if convert_to_html_zip:
             options["formats"]['html.zip'] = True
+        if convert_to_xlsx:
+            options["formats"]['xlsx'] = True
         if conversion_options is not None:
             options["conversion_options"] = conversion_options
         if extra_options:
@@ -847,6 +868,7 @@ class MathpixClient:
                 convert_to_mmd_zip=convert_to_mmd_zip,
                 convert_to_pptx=convert_to_pptx,
                 convert_to_html_zip=convert_to_html_zip,
+                convert_to_xlsx=convert_to_xlsx,
                 request_options=self.request_options,
             )
         except Exception as e:

@@ -30,6 +30,8 @@ class Pdf:
         convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
         convert_to_pptx: Optional boolean to automatically convert your result to pptx
         convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
+        convert_to_xlsx: Optional boolean to automatically convert your result to xlsx
+        convert_to_mmd_overlay_pdf: Optional boolean to return your submitted PDF with an invisible, screen-reader-ready text layer added
         improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
         file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
         callback_url: Optional HTTPS URL to receive this request's webhook deliveries.
@@ -52,6 +54,8 @@ class Pdf:
             convert_to_mmd_zip: Optional[bool] = False,
             convert_to_pptx: Optional[bool] = False,
             convert_to_html_zip: Optional[bool] = False,
+            convert_to_xlsx: Optional[bool] = False,
+            convert_to_mmd_overlay_pdf: Optional[bool] = False,
             improve_mathpix: Optional[bool] = False,
             file_batch_id: Optional[str] = None,
             callback_url: Optional[str] = None,
@@ -76,6 +80,8 @@ class Pdf:
             convert_to_mmd_zip: Optional boolean to automatically convert your result to mmd.zip
             convert_to_pptx: Optional boolean to automatically convert your result to pptx
             convert_to_html_zip: Optional boolean to automatically convert your result to html.zip
+            convert_to_xlsx: Optional boolean to automatically convert your result to xlsx
+            convert_to_mmd_overlay_pdf: Optional boolean to return your submitted PDF with an invisible, screen-reader-ready text layer added
             improve_mathpix: Optional boolean to enable Mathpix to retain user output. Default is true
             file_batch_id: Optional batch ID to associate this file with. (Not yet enabled)
             callback_url: Optional HTTPS URL to receive this request's webhook deliveries.
@@ -105,6 +111,8 @@ class Pdf:
         self.convert_to_mmd_zip = convert_to_mmd_zip
         self.convert_to_pptx = convert_to_pptx
         self.convert_to_html_zip = convert_to_html_zip
+        self.convert_to_xlsx = convert_to_xlsx
+        self.convert_to_mmd_overlay_pdf = convert_to_mmd_overlay_pdf
         self.improve_mathpix=improve_mathpix
         self.file_batch_id = file_batch_id
         self.callback_url = callback_url
@@ -591,3 +599,53 @@ class Pdf:
             ConversionIncompleteError: If the conversion is not complete
         """
         return self.bytes_result(conversion_format='html.zip')
+
+    def to_xlsx_file(self, path: str) -> str:
+        """Save the processed conversion result to an XLSX file.
+
+        Args:
+            path: The local file path where the XLSX output will be saved
+
+        Returns:
+            output_path: The path of the saved XLSX file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='xlsx')
+
+    def to_xlsx_bytes(self) -> bytes:
+        """Get the processed conversion result in XLSX format as bytes.
+
+        Returns:
+            bytes: The binary content of the XLSX result
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='xlsx')
+
+    def to_mmd_overlay_pdf_file(self, path: str) -> str:
+        """Save the accessible overlay PDF (your submitted PDF with an invisible text layer) to a local path.
+
+        Args:
+            path: The local file path where the overlay PDF will be saved
+
+        Returns:
+            output_path: The path of the saved PDF file
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.save_file(path=path, conversion_format='mmd.overlay.pdf')
+
+    def to_mmd_overlay_pdf_bytes(self) -> bytes:
+        """Get the accessible overlay PDF (your submitted PDF with an invisible text layer) as bytes.
+
+        Returns:
+            bytes: The binary content of the overlay PDF
+
+        Raises:
+            ConversionIncompleteError: If the conversion is not complete
+        """
+        return self.bytes_result(conversion_format='mmd.overlay.pdf')

@@ -1,5 +1,12 @@
 # mpxpy changelog
 
+## September 22, 2026
+
+- Automate PyPI releases. The package version is now derived from the git tag via setuptools-scm, so there is no version to bump by hand. Pushing a `vX.Y.Z` tag from master runs `.github/workflows/release.yml`, which builds the sdist and wheel, publishes to PyPI, and creates a published (non-draft) GitHub release. The tag must be valid semver, sit on master, and be newer than the last release, or the run fails before anything is published.
+- Add `convert_to_xlsx` to `pdf_new` and `conversion_new`, plus `to_xlsx_file`/`to_xlsx_bytes` on `Pdf` and `Conversion`, giving xlsx the same convenience flag as the other formats
+- Add `include_hyperlinks` to `pdf_new` to extract PDF link annotations into per-line `links` data
+- Add `convert_to_mmd_overlay_pdf` to `pdf_new` for the new `mmd.overlay.pdf` format (your submitted PDF returned with an invisible, screen-reader-ready text layer, PDF/UA tagged by default; PDF input only), plus `to_mmd_overlay_pdf_file`/`to_mmd_overlay_pdf_bytes` on `Pdf` and `File`. Format options go through `conversion_options["mmd.overlay.pdf"]`
+
 ## August 18, 2026
 
 - Add webhooks support
